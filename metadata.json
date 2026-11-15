@@ -1,0 +1,6 @@
+{
+  "name": "SkyFare",
+  "description": "Find verified cheap domestic and international flights from US airports. Compare real-time airfare deals, baggage policies, and flexible date calendars on SkyFare.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
