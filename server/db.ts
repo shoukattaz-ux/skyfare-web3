@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { FLIGHT_DEALS } from '../src/data/deals.ts';
 import { TRAVEL_GUIDES } from '../src/data/guides.ts';
-import { hashPassword } from './security.ts';
+import crypto from 'node:crypto';
+import { hashPassword, verifyPassword } from './security.ts';
+import { LEGAL_SEED, LEGAL_SEED_VERSION } from './legalSeed.ts';
+import { MIN_PUBLISH_WORDS, countGuideWords, readMinutes } from '../src/lib/guideStats.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -122,6 +125,42 @@ export function initDatabase(): void {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS authors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      role TEXT NOT NULL DEFAULT '',
+      bio TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS guide_revisions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT NOT NULL,
+      saved_by TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      payload_json TEXT NOT NULL,
+      saved_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_guide_revisions_slug ON guide_revisions(slug, id DESC);
+
+    CREATE TABLE IF NOT EXISTS article_feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT NOT NULL,
+      helpful INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_article_feedback_slug ON article_feedback(slug);
+
+    CREATE TABLE IF NOT EXISTS legal_pages_backup (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content_markdown TEXT NOT NULL,
+      backed_up_at TEXT NOT NULL,
+      reason TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS analytics_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       path TEXT NOT NULL,
@@ -130,23 +169,204 @@ export function initDatabase(): void {
     );
   `);
 
+  addColumnIfMissing('guides', 'review_status', "TEXT NOT NULL DEFAULT 'pending_review'");
+  addColumnIfMissing('guides', 'reviewed_by', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('guides', 'reviewed_at', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('guides', 'publish_at', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('guides', 'checklist_json', "TEXT NOT NULL DEFAULT '{}'");
+  addColumnIfMissing('ad_placements', 'ad_size', "TEXT NOT NULL DEFAULT ''");
+  db.exec('CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics_events(created_at);');
+
   seedInitialData();
+  migrateLegacyContent();
+}
+
+function addColumnIfMissing(table: string, column: string, ddl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
+}
+
+export const DEFAULT_BYLINE = 'SkyFare Editorial Team';
+
+/**
+ * One-time, non-destructive content migration for databases created by the original
+ * build. Anything replaced is first copied into a backup table (legal pages) or the
+ * guide revision history (guides), so nothing is lost.
+ */
+function migrateLegacyContent(): void {
+  const version = getSetting<number>('content_version', 0);
+  if (version >= LEGAL_SEED_VERSION) return;
+  const now = new Date().toISOString();
+
+  db.exec('BEGIN;');
+  try {
+    // 1. Legal/trust pages: back up whatever is stored, then install the accurate texts.
+    const existing = db.prepare('SELECT slug, title, content_markdown FROM legal_pages').all() as {
+      slug: string;
+      title: string;
+      content_markdown: string;
+    }[];
+    const backup = db.prepare(
+      'INSERT INTO legal_pages_backup (slug, title, content_markdown, backed_up_at, reason) VALUES (?, ?, ?, ?, ?)'
+    );
+    for (const row of existing) {
+      backup.run(row.slug, row.title, row.content_markdown, now, `pre-v${LEGAL_SEED_VERSION} content audit`);
+    }
+    const upsert = db.prepare(
+      `INSERT INTO legal_pages (slug, title, meta_title, meta_description, content_markdown, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(slug) DO UPDATE SET title = excluded.title, meta_title = excluded.meta_title,
+         meta_description = excluded.meta_description, content_markdown = excluded.content_markdown,
+         updated_at = excluded.updated_at`
+    );
+    for (const p of LEGAL_SEED) {
+      upsert.run(p.slug, p.title, p.metaTitle, p.metaDescription, p.content, now);
+    }
+
+    // 2. Replace invented author personas with a neutral byline (revision kept).
+    const fakeNames = ['Elena Vance', 'Marcus Thorne', 'Claire Lindqvist'];
+    const guides = db.prepare('SELECT slug, payload_json FROM guides').all() as {
+      slug: string;
+      payload_json: string;
+    }[];
+    const snap = db.prepare(
+      'INSERT INTO guide_revisions (slug, saved_by, note, payload_json, saved_at) VALUES (?, ?, ?, ?, ?)'
+    );
+    const upd = db.prepare('UPDATE guides SET author = ?, payload_json = ?, status = ?, review_status = ? WHERE slug = ?');
+    for (const g of guides) {
+      const payload = JSON.parse(g.payload_json);
+      const row = db.prepare('SELECT status, review_status FROM guides WHERE slug = ?').get(g.slug) as {
+        status: string;
+        review_status: string;
+      };
+      let changed = false;
+      if (fakeNames.includes(payload.author)) {
+        payload.author = DEFAULT_BYLINE;
+        payload.authorRole = 'Editorial';
+        changed = true;
+      }
+      for (const key of ['excerpt', 'metaDescription'] as const) {
+        const before = payload[key];
+        if (typeof before === 'string') {
+          const after = before
+            .replace('and how you can consistently pay 40% to 60% less.', 'and the practical habits that tend to bring fares down.')
+            .replace('safer ways to capture 60%+ airfare discounts.', 'safer ways to find lower fares.')
+            .replace('Find verified student airfare discounts on', 'Find student airfare discounts on');
+          if (after !== before) {
+            payload[key] = after;
+            changed = true;
+          }
+        }
+      }
+      // The seed data declared word counts of 740-1,280 for guides of 60-150 words. Use the real figure.
+      const words = countGuideWords(payload);
+      if (payload.wordCount !== words) {
+        payload.wordCount = words;
+        payload.readTimeMinutes = readMinutes(words);
+        changed = true;
+      }
+      let status = row.status;
+      let review = row.review_status;
+      if (words < MIN_PUBLISH_WORDS && status === 'published') {
+        // Too thin to be public. Kept intact as a draft so it can be expanded and re-published.
+        status = 'draft';
+        review = 'needs_revision';
+        changed = true;
+      }
+      if (changed) {
+        snap.run(g.slug, 'system', 'Before content audit (byline, real word count, thin-content gate)', g.payload_json, now);
+        upd.run(payload.author, JSON.stringify(payload), status, review, g.slug);
+      }
+    }
+
+    // 3. Remove the Revcontent placeholder slot (native "sponsored" widget is no longer offered).
+    db.prepare("DELETE FROM ad_placements WHERE network = 'Revcontent' AND ad_unit_code = ''").run();
+
+    // 4. Settings: drop the invented company address and make new flags explicit.
+    const general = getSetting<Record<string, unknown>>('general', {});
+    if (typeof general.companyAddress === 'string' && general.companyAddress.includes('548 Market St')) {
+      general.companyAddress = '';
+    }
+    if (typeof general.defaultTitle === 'string' && general.defaultTitle.startsWith('SkyFare — Cheap Flights')) {
+      general.defaultTitle = 'SkyFare | Airfare Guides and Dated Fare Examples from US Airports';
+    }
+    if (typeof general.defaultDescription === 'string' && /verified cheap/i.test(general.defaultDescription)) {
+      general.defaultDescription =
+        'Plain-English airfare guides and a hand-kept list of example flight prices from US airports, each with its date, baggage allowance and booking link.';
+    }
+    if (general.emailAlertsEnabled === undefined) general.emailAlertsEnabled = false;
+    if (general.publisherName === undefined) general.publisherName = '';
+    setSetting('general', general);
+
+    const mon = getSetting<Record<string, unknown>>('monetization', {});
+    delete mon.revcontentWidgetId;
+    if (mon.adsEnabled === undefined) mon.adsEnabled = false;
+    setSetting('monetization', mon);
+
+    const homepage = getSetting<Record<string, unknown>>('homepage', {});
+    delete homepage.showTestimonials;
+    if (typeof homepage.heroSubtitle === 'string' && /verified/i.test(homepage.heroSubtitle)) {
+      homepage.heroSubtitle =
+        'Plain-English airfare guides, plus a hand-kept list of example fares from US airports with the date, baggage allowance and booking link for each.';
+    }
+    if (homepage.showHowItWorks === undefined) homepage.showHowItWorks = true;
+    setSetting('homepage', homepage);
+
+    // 5. Known public default credentials must never stay usable.
+    for (const [email, pw] of [
+      ['admin@skyfareusa.com', 'SkyFareAdmin2026!'],
+      ['editor@skyfareusa.com', 'SkyFareEditor2026!'],
+    ]) {
+      const u = db.prepare('SELECT id, password_hash FROM users WHERE email = ?').get(email) as
+        | { id: number; password_hash: string }
+        | undefined;
+      if (u && verifyPassword(pw, u.password_hash)) {
+        db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(u.id);
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
+        console.warn(`[security] Disabled account ${email}: it still used the publicly documented default password.`);
+      }
+    }
+    ensureActiveAdmin();
+
+    setSetting('content_version', LEGAL_SEED_VERSION);
+    db.exec('COMMIT;');
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw err;
+  }
+}
+
+function ensureActiveAdmin(): void {
+  const row = db.prepare("SELECT COUNT(*) AS cnt FROM users WHERE role = 'admin' AND active = 1").get() as {
+    cnt: number;
+  };
+  if (row.cnt > 0) return;
+  const email = (process.env.ADMIN_EMAIL || 'admin@skyfare.local').trim().toLowerCase();
+  let password = process.env.ADMIN_INITIAL_PASSWORD;
+  let generated = false;
+  if (!password || password.length < 12) {
+    password = crypto.randomBytes(15).toString('base64url');
+    generated = true;
+  }
+  db.prepare('DELETE FROM users WHERE email = ?').run(email);
+  db.prepare(
+    "INSERT INTO users (email, name, role, password_hash, active, created_at) VALUES (?, 'Site Administrator', 'admin', ?, 1, ?)"
+  ).run(email, hashPassword(password), new Date().toISOString());
+  console.warn('[security] Created the initial administrator account.');
+  console.warn(`[security]   email:    ${email}`);
+  if (generated) {
+    console.warn(`[security]   password: ${password}   (generated, shown once - change it after signing in)`);
+  } else {
+    console.warn('[security]   password: taken from ADMIN_INITIAL_PASSWORD');
+  }
 }
 
 function seedInitialData(): void {
   const now = new Date().toISOString();
 
-  // 1. Seed default Admin & Editor accounts if none exist
-  const userCount = (db.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number }).cnt;
-  if (userCount === 0) {
-    const initialAdminPass = process.env.ADMIN_INITIAL_PASSWORD || 'SkyFareAdmin2026!';
-    const initialEditorPass = process.env.EDITOR_INITIAL_PASSWORD || 'SkyFareEditor2026!';
-    const insertUser = db.prepare(
-      'INSERT INTO users (email, name, role, password_hash, active, created_at) VALUES (?, ?, ?, ?, 1, ?)'
-    );
-    insertUser.run('admin@skyfareusa.com', 'Elena Vance', 'admin', hashPassword(initialAdminPass), now);
-    insertUser.run('editor@skyfareusa.com', 'Marcus Thorne', 'editor', hashPassword(initialEditorPass), now);
-  }
+  // 1. Administrator account is created by ensureActiveAdmin() (no default passwords).
 
   // 2. Seed categories
   const catCount = (db.prepare('SELECT COUNT(*) as cnt FROM categories').get() as { cnt: number }).cnt;
@@ -203,20 +423,19 @@ function seedInitialData(): void {
     }
   }
 
-  // 5. Seed ad placements (AdSense, Media.net, Revcontent)
+  // 5. Seed ad placements (inactive until a publisher ID, a unit and the master switch are set)
   const adCount = (db.prepare('SELECT COUNT(*) as cnt FROM ad_placements').get() as { cnt: number }).cnt;
   if (adCount === 0) {
     const slots = [
-      ['skyfare-top-leaderboard', 'Homepage & Category Top Leaderboard (728x90)', 'AdSense', 1, '', 96],
-      ['skyfare-infeed-1', 'Deals Feed Mid-Stream Responsive Banner', 'Media.net', 1, '', 120],
-      ['guide-sidebar-300x250', 'Travel Guide Sticky Sidebar (300x250)', 'AdSense', 1, '', 260],
-      ['rc-skyfare-native', 'Below-Content Native Recommendations Grid', 'Revcontent', 1, '', 200],
+      ['skyfare-top-leaderboard', 'Top of page banner (list pages)', 'AdSense', 0, '', 100, '728x90'],
+      ['skyfare-infeed-1', 'In-feed banner between deal rows', 'Media.net', 0, '', 120, '728x90'],
+      ['guide-sidebar-300x250', 'Guide page sidebar rectangle', 'AdSense', 0, '', 260, '300x250'],
     ];
     const insertSlot = db.prepare(
-      'INSERT INTO ad_placements (slot_id, name, network, enabled, ad_unit_code, min_height) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO ad_placements (slot_id, name, network, enabled, ad_unit_code, min_height, ad_size) VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
-    for (const [id, name, net, enabled, code, mh] of slots) {
-      insertSlot.run(id, name, net, enabled, code, mh);
+    for (const [id, name, net, enabled, code, mh, size] of slots) {
+      insertSlot.run(id, name, net, enabled, code, mh, size);
     }
   }
 
@@ -248,11 +467,13 @@ function seedInitialData(): void {
       JSON.stringify({
         siteName: 'SkyFare',
         tagline: 'Fly more. Pay less.',
-        supportEmail: 'support@skyfareusa.com',
-        companyAddress: '548 Market St, Suite 41290, San Francisco, CA 94104',
-        defaultTitle: 'SkyFare — Cheap Flights & Airfare Deals from the USA',
+        supportEmail: process.env.SUPPORT_EMAIL || '',
+        publisherName: '',
+        companyAddress: '',
+        emailAlertsEnabled: false,
+        defaultTitle: 'SkyFare | Airfare Guides and Dated Fare Examples from US Airports',
         defaultDescription:
-          'Fly more, pay less. Discover verified cheap domestic and international flight deals from US airports with transparent baggage policies and price alerts.',
+          'Plain-English airfare guides and a hand-kept list of example flight prices from US airports, each with its date, baggage allowance and booking link.',
         gscVerificationCode: '',
         ga4MeasurementId: process.env.VITE_GA4_MEASUREMENT_ID || '',
       })
@@ -263,7 +484,7 @@ function seedInitialData(): void {
         adsensePublisherId: process.env.VITE_ADSENSE_PUBLISHER_ID || '',
         medianetCustomerId: '',
         medianetSiteId: '',
-        revcontentWidgetId: process.env.VITE_REVCONTENT_WIDGET_ID || 'rc-skyfare-native',
+        adsEnabled: false,
         adsTxtExtra: '',
       })
     );
@@ -281,70 +502,17 @@ function seedInitialData(): void {
       JSON.stringify({
         heroTitle: 'Fly more. Pay less on US & international flights.',
         heroSubtitle:
-          'Verified domestic and international airfare drops from major US airports, complete with carry-on rules, stops, and real booking windows.',
+          'Plain-English airfare guides, plus a hand-kept list of example fares from US airports with the date, baggage allowance and booking link for each.',
         showTopWeekly: true,
         showDestinations: true,
-        showTestimonials: true,
+        showHowItWorks: true,
         showNewsletter: true,
         showFaqs: true,
       })
     );
   }
 
-  // 8. Seed editable legal pages
-  const legalCount = (db.prepare('SELECT COUNT(*) as cnt FROM legal_pages').get() as { cnt: number }).cnt;
-  if (legalCount === 0) {
-    const insertLegal = db.prepare(
-      'INSERT INTO legal_pages (slug, title, meta_title, meta_description, content_markdown, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    );
-    const defaultLegal: [string, string, string, string, string][] = [
-      [
-        'about',
-        'About SkyFare',
-        'About SkyFare — Our Airfare Mission & Team',
-        'Meet the analysts behind SkyFare and learn how we verify US domestic and international flight deals without hidden markups.',
-        'SkyFare Media LLC was founded in San Francisco to help US travelers find verified domestic and international flight deals with full baggage and cabin transparency.\n\nWe partner with accredited aviation feeds (Amadeus, Travelpayouts, Skyscanner, and Expedia Partner Solutions) and never charge booking markups.',
-      ],
-      [
-        'privacy',
-        'Privacy Policy',
-        'Privacy Policy (GDPR, CCPA & AdSense) | SkyFare',
-        'Read how SkyFare handles cookies, price alerts, Google AdSense, Media.net, and Revcontent advertising preferences.',
-        'SkyFare Media LLC collects only the information you voluntarily submit via price alerts, newsletters, and our contact form. Saved deals and theme preferences remain locally in your browser.\n\nThird-party advertising partners including Google AdSense, Media.net, and Revcontent may use cookies or device identifiers to deliver relevant advertisements subject to your consent preferences under GDPR and CCPA/CPRA.',
-      ],
-      [
-        'cookie-policy',
-        'Cookie Policy',
-        'Cookie Policy & Consent Controls | SkyFare',
-        'Detailed breakdown of essential, analytics, and advertising cookies used on SkyFare.',
-        'SkyFare uses three categories of cookies and local storage:\n\n1. Essential Storage: Keeps your theme preference, saved deals shortlist, and admin session security intact.\n2. Analytics Cookies: Measures page speed and route demand when enabled.\n3. Advertising & Native Recommendation Cookies: Supports Google AdSense, Media.net, and Revcontent ad delivery and frequency capping.',
-      ],
-      [
-        'terms',
-        'Terms & Conditions',
-        'Terms & Conditions | SkyFare',
-        'Review SkyFare terms of service, fare accuracy scope, and third-party airline booking responsibilities.',
-        'SkyFare is an independent airfare discovery and travel editorial publisher. We do not directly sell tickets or operate aircraft. Outbound deal links direct you to accredited partner booking platforms whose terms govern final checkout.',
-      ],
-      [
-        'affiliate-disclosure',
-        'Affiliate & Advertising Disclosure',
-        'Affiliate & Advertising Disclosure | SkyFare',
-        'Full FTC-compliant disclosure of SkyFare affiliate partnerships and display advertising.',
-        'In accordance with FTC guidelines, outbound deal buttons carry rel="sponsored nofollow" to partners including Travelpayouts, Expedia Affiliate Network, Skyscanner, and Amadeus partner platforms. SkyFare may earn a referral commission at zero additional cost to travelers.',
-      ],
-      [
-        'disclaimer',
-        'Airfare Pricing Disclaimer',
-        'Airfare Pricing Disclaimer | SkyFare',
-        'Important notice regarding dynamic airline fare changes, taxes, baggage fees, and travel documents.',
-        'Prices may change without notice. Fares reflect observed quotes at the listed update timestamp for one adult traveler in USD. Optional checked bags, seat assignments, and visa eligibility remain the traveler responsibility.',
-      ],
-    ];
-    for (const [slug, title, mt, md, body] of defaultLegal) {
-      insertLegal.run(slug, title, mt, md, body, now);
-    }
-  }
+  // 8. Legal pages are installed by migrateLegacyContent() from server/legalSeed.ts
 }
 
 export function getSetting<T>(key: string, fallback: T): T {
@@ -373,8 +541,51 @@ export function getPublishedDeals() {
 }
 
 export function getPublishedGuides() {
+  const nowIso = new Date().toISOString();
   const rows = db
-    .prepare("SELECT payload_json, tags FROM guides WHERE status = 'published'")
-    .all() as { payload_json: string; tags: string }[];
-  return rows.map((r) => ({ ...JSON.parse(r.payload_json), tags: r.tags }));
+    .prepare(
+      `SELECT payload_json, tags, review_status, reviewed_at, publish_at
+       FROM guides
+       WHERE status = 'published' AND (publish_at = '' OR publish_at <= ?)`
+    )
+    .all(nowIso) as {
+    payload_json: string;
+    tags: string;
+    review_status: string;
+    reviewed_at: string;
+    publish_at: string;
+  }[];
+  return rows.map((r) => ({
+    ...JSON.parse(r.payload_json),
+    tags: r.tags,
+    reviewStatus: r.review_status,
+    reviewedAt: r.reviewed_at || undefined,
+  }));
+}
+
+export function getActiveAuthors() {
+  return db
+    .prepare('SELECT id, name, role, bio FROM authors WHERE active = 1 ORDER BY name ASC')
+    .all() as { id: number; name: string; role: string; bio: string }[];
+}
+
+/** Everything the public site needs on first load. Used by /api/bootstrap and embedded in the page HTML. */
+export function buildBootstrap() {
+  const { adsTxtExtra: _omit, ...monetization } = getSetting<Record<string, unknown>>('monetization', {});
+  return {
+    deals: getPublishedDeals(),
+    guides: getPublishedGuides(),
+    categories: db.prepare('SELECT id, name, slug, description FROM categories ORDER BY name ASC').all(),
+    adPlacements: db
+      .prepare('SELECT slot_id, name, network, enabled, ad_unit_code, min_height, ad_size FROM ad_placements')
+      .all(),
+    legalPages: db
+      .prepare('SELECT slug, title, meta_title, meta_description, content_markdown, updated_at FROM legal_pages')
+      .all(),
+    general: getSetting('general', {}),
+    monetization,
+    menus: getSetting('menus', []),
+    homepage: getSetting('homepage', {}),
+    authors: getActiveAuthors(),
+  };
 }

@@ -76,8 +76,8 @@ export const SavedDealsDrawer: React.FC<SavedDealsDrawerProps> = ({
                     <div className="font-mono-tabular text-lg font-bold text-[#0B1F3A] dark:text-white">
                       ${deal.price}
                     </div>
-                    <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
-                      {deal.discountPercent}% off
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {deal.tripType.toLowerCase()}
                     </div>
                   </div>
                 </div>
@@ -99,7 +99,7 @@ export const SavedDealsDrawer: React.FC<SavedDealsDrawerProps> = ({
                     href={deal.affiliateUrl}
                     target="_blank"
                     rel="sponsored nofollow noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg bg-orange-600 hover:bg-orange-700 px-3 py-1.5 text-xs font-semibold text-white"
+                    className="inline-flex items-center gap-1 rounded-lg bg-orange-700 hover:bg-orange-800 px-3 py-1.5 text-xs font-semibold text-white"
                   >
                     <span>View Deal</span>
                     <ExternalLink className="h-3 w-3" />

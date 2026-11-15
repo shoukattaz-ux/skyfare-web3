@@ -8,10 +8,9 @@ import type {
 } from '../types/flight';
 import { AIRLINES } from '../data/airlines';
 import { DealCard } from './DealCard';
-import { InFeedAd } from './AdSlots';
 import type { SearchQueryState } from './FlightSearchBar';
 
-export type SortOption = 'cheapest' | 'fastest' | 'best-value' | 'biggest-discount';
+export type SortOption = 'cheapest' | 'fastest' | 'best-value';
 
 interface DealsExplorerProps {
   deals: FlightDeal[];
@@ -106,10 +105,9 @@ export const DealsExplorer: React.FC<DealsExplorerProps> = ({
     return [...matched].sort((a, b) => {
       if (sortBy === 'cheapest') return a.price - b.price;
       if (sortBy === 'fastest') return a.durationMinutes - b.durationMinutes;
-      if (sortBy === 'biggest-discount') return b.discountPercent - a.discountPercent;
       // best-value: discount % weighted minus stop penalty
-      const scoreA = a.discountPercent * 2 - a.stops * 15 - a.price * 0.03;
-      const scoreB = b.discountPercent * 2 - b.stops * 15 - b.price * 0.03;
+      const scoreA = -a.stops * 15 - a.price * 0.03 - a.durationMinutes * 0.02;
+      const scoreB = -b.stops * 15 - b.price * 0.03 - b.durationMinutes * 0.02;
       return scoreB - scoreA;
     });
   }, [
@@ -158,7 +156,6 @@ export const DealsExplorer: React.FC<DealsExplorerProps> = ({
                 <option value="cheapest">Cheapest First</option>
                 <option value="fastest">Fastest Flight</option>
                 <option value="best-value">Best Value</option>
-                <option value="biggest-discount">Biggest Discount</option>
               </select>
             </label>
 
@@ -310,10 +307,10 @@ export const DealsExplorer: React.FC<DealsExplorerProps> = ({
       {/* Transparency Disclaimer */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400 px-1">
         <span>
-          Prices may change as airline fare buckets sell out. Outbound partner links carry{' '}
-          <code className="font-mono-tabular">rel="sponsored nofollow"</code>.
+          Fares are dated snapshots, not live quotes, and may have changed or sold out. Booking links open
+          partner sites and may be affiliate links.
         </span>
-        <span>Last verified: Nov 14, 2026 at 09:00 AM EST</span>
+        <span>Each card shows when its price was recorded.</span>
       </div>
 
       {/* Results Grid */}
@@ -328,7 +325,7 @@ export const DealsExplorer: React.FC<DealsExplorerProps> = ({
           <button
             type="button"
             onClick={resetFilters}
-            className="mt-4 rounded-lg bg-orange-600 hover:bg-orange-700 px-4 py-2 text-xs font-semibold text-white"
+            className="mt-4 rounded-lg bg-orange-700 hover:bg-orange-800 px-4 py-2 text-xs font-semibold text-white"
           >
             Reset All Filters
           </button>
@@ -349,11 +346,6 @@ export const DealsExplorer: React.FC<DealsExplorerProps> = ({
 
           {filteredDeals.length > 6 && (
             <>
-              <InFeedAd
-                slotId="skyfare-infeed-1"
-                adPlacements={adPlacements}
-                monetization={monetization}
-              />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredDeals.slice(6).map((deal) => (
                   <DealCard

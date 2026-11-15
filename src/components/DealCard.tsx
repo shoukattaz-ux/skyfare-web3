@@ -2,6 +2,7 @@ import React from 'react';
 import { Bookmark, ExternalLink, Clock, Briefcase } from 'lucide-react';
 import type { FlightDeal } from '../types/flight';
 import { AirlineLogo } from './AirlineLogo';
+import { Link } from './Link';
 
 interface DealCardProps {
   deal: FlightDeal;
@@ -10,14 +11,14 @@ interface DealCardProps {
   onNavigate: (path: string) => void;
 }
 
-function getTimeLeftLabel(expiresAt: string): string {
-  const target = new Date(expiresAt).getTime();
-  const now = new Date('2026-11-14T11:15:00Z').getTime();
-  const diffMs = Math.max(0, target - now);
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  if (days > 0) return `Ends in ${days}d ${hours}h`;
-  return `Ends in ${Math.max(1, hours)}h`;
+/** Honest status line: when the fare was recorded and whether its listed window has passed. */
+function getStatusLabel(deal: FlightDeal): { text: string; ended: boolean } {
+  const recorded = new Date(deal.lastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const ended = new Date(deal.expiresAt).getTime() < Date.now();
+  return {
+    text: ended ? `Recorded ${recorded}. Listed window has passed: check the current price.` : `Recorded ${recorded}`,
+    ended,
+  };
 }
 
 export const DealCard: React.FC<DealCardProps> = ({
@@ -26,7 +27,7 @@ export const DealCard: React.FC<DealCardProps> = ({
   onToggleSave,
   onNavigate,
 }) => {
-  const timeLeft = getTimeLeftLabel(deal.expiresAt);
+  const status = getStatusLabel(deal);
   const formattedUpdated = new Date(deal.lastUpdated).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -40,13 +41,9 @@ export const DealCard: React.FC<DealCardProps> = ({
           <div className="flex items-center gap-3 min-w-0">
             <AirlineLogo airlineSlug={deal.airlineSlug} airlineCode={deal.airlineCode} />
             <div className="min-w-0">
-              <button
-                type="button"
-                onClick={() => onNavigate(`/airlines/${deal.airlineSlug}`)}
-                className="text-sm font-semibold text-[#0B1F3A] dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 transition-colors truncate block text-left"
-              >
+              <Link href={`/airlines/${deal.airlineSlug}`} onNavigate={onNavigate} className="text-sm font-semibold text-[#0B1F3A] dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 transition-colors truncate block text-left">
                 {deal.airlineName}
-              </button>
+              </Link>
               <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
                 <span>{deal.tripType}</span>
                 <span aria-hidden="true">·</span>
@@ -81,31 +78,27 @@ export const DealCard: React.FC<DealCardProps> = ({
           <div className="min-w-0">
             <div className="flex items-center gap-2 font-mono-tabular text-lg font-bold text-[#0B1F3A] dark:text-white">
               <span>{deal.originCode}</span>
-              <span className="text-slate-400 dark:text-slate-500 font-sans text-sm" aria-hidden="true">
+              <span className="text-slate-400 dark:text-slate-400 font-sans text-sm" aria-hidden="true">
                 →
               </span>
               <span>{deal.destinationCode}</span>
             </div>
-            <button
-              type="button"
-              onClick={() => onNavigate(`/destinations/${deal.destinationSlug}`)}
-              className="mt-0.5 text-sm text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 transition-colors text-left truncate block"
-            >
+            <Link href={`/destinations/${deal.destinationSlug}`} onNavigate={onNavigate} className="mt-0.5 text-sm text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 transition-colors text-left truncate block">
               {deal.originCity} to {deal.destinationCity}
-            </button>
+            </Link>
           </div>
 
           <div className="text-right shrink-0">
             <div className="flex items-baseline justify-end gap-2">
-              <span className="text-xs text-slate-400 dark:text-slate-500 line-through font-mono-tabular">
-                ${deal.originalPrice}
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                from
               </span>
               <span className="text-2xl font-bold text-[#0B1F3A] dark:text-white font-mono-tabular">
                 ${deal.price}
               </span>
             </div>
-            <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 font-mono-tabular">
-              {deal.discountPercent}% off usual fare
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              {deal.tripType.toLowerCase()}, per adult
             </div>
           </div>
         </div>
@@ -127,27 +120,27 @@ export const DealCard: React.FC<DealCardProps> = ({
                 : `${deal.stops} stop${deal.stopoverAirport ? ` (${deal.stopoverAirport})` : ''}`}
             </dd>
           </div>
-          <div className="col-span-2 flex items-start gap-1.5 text-slate-600 dark:text-slate-300">
-            <Briefcase className="h-3.5 w-3.5 mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
-            <span>{deal.baggagePolicy}</span>
-          </div>
         </dl>
+        <div className="mt-2.5 flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+          <Briefcase className="h-3.5 w-3.5 mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <span>{deal.baggagePolicy}</span>
+        </div>
       </div>
 
       {/* Bottom Action Bar */}
       <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-mono-tabular">
-          <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />
-          <span>{timeLeft}</span>
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 ">
+          <Clock className={`h-3.5 w-3.5 shrink-0 ${status.ended ? 'text-red-600 dark:text-red-400' : 'text-slate-400'}`} aria-hidden="true" />
+          <span className={status.ended ? 'text-red-700 dark:text-red-400' : ''}>{status.text}</span>
         </div>
 
         <a
           href={deal.affiliateUrl}
           target="_blank"
           rel="sponsored nofollow noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-700 hover:bg-orange-800 px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
         >
-          <span>View Deal</span>
+          <span>View fare on partner site</span>
           <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
         </a>
       </div>

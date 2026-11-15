@@ -6,9 +6,11 @@ import type {
   TravelGuide,
 } from '../types/flight';
 import { TRAVEL_GUIDES } from '../data/guides';
-import { getImageSrc } from '../lib/images';
-import { InFeedAd, LeaderboardAd, RevcontentWidget, SidebarAd } from '../components/AdSlots';
+import { getImageAlt, getImageSrc, getLargeImageSrc } from '../lib/images';
+import { InFeedAd, LeaderboardAd, SidebarAd } from '../components/AdSlots';
+import { useSiteConfig } from '../lib/siteConfig';
 import { SocialShare } from '../components/SocialShare';
+import { Link } from '../components/Link';
 
 interface GuidesIndexPageProps {
   guides?: TravelGuide[];
@@ -57,7 +59,7 @@ export const GuidesIndexPage: React.FC<GuidesIndexPageProps> = ({
             onClick={() => setSelectedCategory(cat)}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
               selectedCategory === cat
-                ? 'bg-[#0B1F3A] dark:bg-sky-600 text-white'
+                ? 'bg-[#0B1F3A] dark:bg-sky-700 text-white'
                 : 'bg-white dark:bg-[#0F1D32] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-500/50'
             }`}
           >
@@ -82,9 +84,11 @@ export const GuidesIndexPage: React.FC<GuidesIndexPageProps> = ({
               <div className="aspect-[4/3] w-full overflow-hidden bg-slate-200 dark:bg-slate-800">
                 <img
                   src={guide.customImageUrl || getImageSrc(guide.imageKey)}
-                  alt={guide.title}
+                  alt={guide.imageAlt || getImageAlt(guide.imageKey)}
+                  width={720}
+                  height={538}
                   loading="lazy"
-                  referrerPolicy="no-referrer"
+                  decoding="async"
                   className="h-full w-full object-cover"
                 />
               </div>
@@ -93,13 +97,9 @@ export const GuidesIndexPage: React.FC<GuidesIndexPageProps> = ({
                   {guide.category} · {guide.readTimeMinutes} min read · Updated {guide.updatedAt}
                 </div>
                 <h2 className="mt-2 text-lg font-bold text-[#0B1F3A] dark:text-white leading-snug">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate(`/guides/${guide.slug}`)}
-                    className="text-left hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer"
-                  >
+                  <Link href={`/guides/${guide.slug}`} onNavigate={onNavigate} className="text-left hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer">
                     {guide.title}
-                  </button>
+                  </Link>
                 </h2>
                 <p className="mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                   {guide.excerpt}
@@ -110,24 +110,14 @@ export const GuidesIndexPage: React.FC<GuidesIndexPageProps> = ({
               <span className="text-slate-500 dark:text-slate-400">
                 By {guide.author}
               </span>
-              <button
-                type="button"
-                onClick={() => onNavigate(`/guides/${guide.slug}`)}
-                className="font-semibold text-sky-700 dark:text-sky-400 hover:underline cursor-pointer"
-              >
+              <Link href={`/guides/${guide.slug}`} onNavigate={onNavigate} className="font-semibold text-sky-700 dark:text-sky-400 hover:underline cursor-pointer">
                 Read Guide →
-              </button>
+              </Link>
             </div>
           </article>
         ))}
       </div>
 
-      <RevcontentWidget
-        onNavigate={onNavigate}
-        adPlacements={adPlacements}
-        monetization={monetization}
-        guides={activeGuides}
-      />
     </div>
   );
 };
@@ -141,6 +131,39 @@ interface GuideDetailPageProps {
   monetization?: MonetizationSettings;
 }
 
+const GuideFeedback: React.FC<{ slug: string }> = ({ slug }) => {
+  const [state, setState] = React.useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  const send = async (helpful: boolean) => {
+    setState('sending');
+    try {
+      const res = await fetch(`/api/guides/${encodeURIComponent(slug)}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ helpful }),
+      });
+      setState(res.ok || res.status === 429 ? 'done' : 'error');
+    } catch {
+      setState('error');
+    }
+  };
+  const btn =
+    'rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-60';
+  return (
+    <div role="group" aria-label="Was this guide helpful?" className="flex flex-wrap items-center gap-3">
+      <span className="text-sm font-medium text-[#0B1F3A] dark:text-white">Was this guide helpful?</span>
+      {state === 'done' ? (
+        <span role="status" className="text-sm text-emerald-700 dark:text-emerald-400">Thanks for the feedback.</span>
+      ) : (
+        <>
+          <button type="button" disabled={state === 'sending'} onClick={() => send(true)} className={btn}>Yes</button>
+          <button type="button" disabled={state === 'sending'} onClick={() => send(false)} className={btn}>No</button>
+          {state === 'error' && <span role="alert" className="text-sm text-red-700 dark:text-red-400">Could not send. Please try again.</span>}
+        </>
+      )}
+    </div>
+  );
+};
+
 export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
   slug,
   guides,
@@ -149,6 +172,8 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
   adPlacements,
   monetization,
 }) => {
+  const { general } = useSiteConfig();
+  const alertsEnabled = general?.emailAlertsEnabled === true;
   const activeGuides = guides && guides.length > 0 ? guides : TRAVEL_GUIDES;
   const guide = activeGuides.find((g) => g.slug === slug);
 
@@ -158,18 +183,15 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
         <h1 className="text-2xl font-bold text-[#0B1F3A] dark:text-white">
           Guide Not Found
         </h1>
-        <button
-          type="button"
-          onClick={() => onNavigate('/guides')}
-          className="mt-5 rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white"
-        >
+        <Link href={'/guides'} onNavigate={onNavigate} className="mt-5 rounded-lg bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white">
           Browse All Guides
-        </button>
+        </Link>
       </div>
     );
   }
 
   const related = activeGuides.filter((g) => g.slug !== guide.slug).slice(0, 4);
+  const reviewedOn = guide.reviewStatus === 'reviewed' && guide.reviewedAt ? guide.reviewedAt.slice(0, 10) : '';
   const tagItems = guide.tags
     ? guide.tags
         .split(',')
@@ -180,14 +202,10 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-10">
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-        <button
-          type="button"
-          onClick={() => onNavigate('/guides')}
-          className="hover:text-[#0B1F3A] dark:hover:text-white inline-flex items-center gap-1 cursor-pointer"
-        >
+        <Link href={'/guides'} onNavigate={onNavigate} className="hover:text-[#0B1F3A] dark:hover:text-white inline-flex items-center gap-1 cursor-pointer">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Travel Guides</span>
-        </button>
+        </Link>
         <span aria-hidden="true">/</span>
         <span className="truncate font-medium text-slate-800 dark:text-slate-200">
           {guide.title}
@@ -220,7 +238,11 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
 
             <div className="text-xs text-slate-500 dark:text-slate-400 pt-2 flex flex-wrap items-center justify-between gap-2">
               <span>
-                Written by <strong className="text-slate-800 dark:text-slate-200">{guide.author}</strong> ({guide.authorRole})
+                By <strong className="text-slate-800 dark:text-slate-200">{guide.author}</strong>
+                {guide.authorRole && guide.authorRole !== 'Editorial' ? ` (${guide.authorRole})` : ''}
+                {reviewedOn && <> · Reviewed by a person on {reviewedOn}</>}
+                {' · '}
+                <Link href="/editorial-policy" onNavigate={onNavigate} className="underline">How we prepare guides</Link>
               </span>
               {tagItems.length > 0 && (
                 <span className="text-slate-500 dark:text-slate-400">
@@ -234,9 +256,11 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
 
           <div className="aspect-[16/9] w-full overflow-hidden rounded-xl bg-slate-200 dark:bg-slate-800">
             <img
-              src={guide.customImageUrl || getImageSrc(guide.imageKey)}
-              alt={guide.title}
-              referrerPolicy="no-referrer"
+              src={guide.customImageUrl || getLargeImageSrc(guide.imageKey)}
+              alt={guide.imageAlt || getImageAlt(guide.imageKey)}
+              width={1280}
+              height={720}
+              fetchPriority="high"
               className="h-full w-full object-cover"
             />
           </div>
@@ -264,7 +288,7 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
               )}
 
               {section.table && (
-                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                <div role="region" aria-label={`${section.heading}: table`} tabIndex={0} className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 focus-visible:outline-2 focus-visible:outline-sky-500">
                   <table className="w-full text-left text-xs sm:text-sm">
                     <thead className="bg-slate-50 dark:bg-[#0B1526] text-slate-700 dark:text-slate-200">
                       <tr>
@@ -320,6 +344,15 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
               ))}
             </section>
           )}
+
+          <footer className="pt-6 border-t border-slate-200 dark:border-slate-800 space-y-5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              General information, not advice. Airline rules, fees and fares change; check the airline's own current
+              pages before you buy or travel. See the{' '}
+              <Link href="/disclaimer" onNavigate={onNavigate} className="underline">Disclaimer</Link>.
+            </p>
+            <GuideFeedback slug={guide.slug} />
+          </footer>
         </article>
 
         {/* Sidebar */}
@@ -330,18 +363,32 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
             monetization={monetization}
           />
 
-          <div className="rounded-2xl bg-[#0B1F3A] text-white p-6 space-y-3">
-            <h3 className="text-lg font-bold">Get Instant Fare Alerts</h3>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              We monitor nonstop and 1-stop drops from 35+ US airports so you book first.
+          {alertsEnabled && (
+            <div className="rounded-2xl bg-[#0B1F3A] text-white p-6 space-y-3">
+              <h3 className="text-lg font-bold">Fare alerts by email</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Tell us a route and a price limit and we will email you if a matching fare is recorded.
+              </p>
+              <button
+                type="button"
+                onClick={onOpenAlerts}
+                className="w-full rounded-xl bg-orange-700 hover:bg-orange-800 py-2.5 text-xs font-semibold text-white transition-colors"
+              >
+                Set up a price alert
+              </button>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+            <h3 className="text-sm font-bold text-[#0B1F3A] dark:text-white">Spotted an error?</h3>
+            <p className="mt-1.5">
+              Airline rules and fees change. If something here is wrong or out of date, tell us and we will check it.
+              See our{' '}
+              <Link href="/corrections-policy" onNavigate={onNavigate} className="underline text-sky-700 dark:text-sky-400">
+                Corrections Policy
+              </Link>
+              .
             </p>
-            <button
-              type="button"
-              onClick={onOpenAlerts}
-              className="w-full rounded-xl bg-orange-600 hover:bg-orange-700 py-2.5 text-xs font-semibold text-white transition-colors cursor-pointer"
-            >
-              Set Up Price Alert
-            </button>
           </div>
 
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5 space-y-3">
@@ -352,13 +399,9 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
             <ul className="space-y-2.5">
               {related.map((rel) => (
                 <li key={rel.slug}>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate(`/guides/${rel.slug}`)}
-                    className="text-left text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-sky-400 leading-snug cursor-pointer"
-                  >
+                  <Link href={`/guides/${rel.slug}`} onNavigate={onNavigate} className="text-left text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-sky-400 leading-snug cursor-pointer">
                     {rel.title}
-                  </button>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -366,12 +409,6 @@ export const GuideDetailPage: React.FC<GuideDetailPageProps> = ({
         </aside>
       </div>
 
-      <RevcontentWidget
-        onNavigate={onNavigate}
-        adPlacements={adPlacements}
-        monetization={monetization}
-        guides={activeGuides}
-      />
     </div>
   );
 };

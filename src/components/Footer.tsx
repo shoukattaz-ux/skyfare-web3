@@ -1,6 +1,8 @@
 import React from 'react';
 import { DESTINATIONS } from '../data/destinations';
 import { AIRLINES } from '../data/airlines';
+import { Link } from './Link';
+import { useSiteConfig } from '../lib/siteConfig';
 
 interface FooterProps {
   onNavigate: (path: string) => void;
@@ -11,6 +13,8 @@ export const Footer: React.FC<FooterProps> = ({
   onNavigate,
   onOpenCookieSettings,
 }) => {
+  const { general } = useSiteConfig();
+  const owner = general?.publisherName?.trim();
   const linkCls =
     'text-sm text-slate-600 dark:text-slate-400 hover:text-[#0B1F3A] dark:hover:text-white transition-colors text-left';
 
@@ -19,21 +23,17 @@ export const Footer: React.FC<FooterProps> = ({
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
           <div className="lg:col-span-2">
-            <button
-              type="button"
-              onClick={() => onNavigate('/')}
-              className="inline-flex items-center gap-2 text-lg font-bold text-[#0B1F3A] dark:text-white font-display"
-            >
+            <Link href={'/'} onNavigate={onNavigate} className="inline-flex items-center gap-2 text-lg font-bold text-[#0B1F3A] dark:text-white font-display">
               <span>SkyFare</span>
-            </button>
+            </Link>
             <p className="mt-2 text-sm font-medium text-sky-700 dark:text-sky-400">
               Fly more. Pay less.
             </p>
             <p className="mt-3 text-sm text-slate-600 dark:text-slate-400 max-w-sm leading-relaxed">
-              Independent US airfare discovery helping travelers compare verified domestic and international flight deals, baggage policies, and flexible fare calendars.
+              An independent publication about flying from US airports: plain-English guides and a hand-kept list of dated example fares.
             </p>
-            <p className="mt-4 text-xs text-slate-500 dark:text-slate-500 leading-relaxed">
-              Prices may change without notice based on airline seat inventory. All deals link to accredited booking partners.
+            <p className="mt-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              Fares are snapshots, not live quotes. We do not sell tickets; booking links lead to third-party sites and may be affiliate links.
             </p>
           </div>
 
@@ -44,13 +44,9 @@ export const Footer: React.FC<FooterProps> = ({
             <ul className="mt-3 space-y-2">
               {DESTINATIONS.slice(0, 6).map((dest) => (
                 <li key={dest.slug}>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate(`/destinations/${dest.slug}`)}
-                    className={linkCls}
-                  >
+                  <Link href={`/destinations/${dest.slug}`} onNavigate={onNavigate} className={linkCls}>
                     Flights to {dest.city}
-                  </button>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -63,41 +59,25 @@ export const Footer: React.FC<FooterProps> = ({
             <ul className="mt-3 space-y-2">
               {AIRLINES.slice(0, 4).map((airline) => (
                 <li key={airline.slug}>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate(`/airlines/${airline.slug}`)}
-                    className={linkCls}
-                  >
+                  <Link href={`/airlines/${airline.slug}`} onNavigate={onNavigate} className={linkCls}>
                     {airline.name}
-                  </button>
+                  </Link>
                 </li>
               ))}
               <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/guides')}
-                  className={linkCls}
-                >
-                  All 15 Travel Guides
-                </button>
+                <Link href={'/guides'} onNavigate={onNavigate} className={linkCls}>
+                  All guides
+                </Link>
               </li>
               <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/search')}
-                  className={linkCls}
-                >
+                <Link href={'/search'} onNavigate={onNavigate} className={linkCls}>
                   Site Search
-                </button>
+                </Link>
               </li>
               <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/sitemap')}
-                  className={linkCls}
-                >
+                <Link href={'/sitemap'} onNavigate={onNavigate} className={linkCls}>
                   HTML Sitemap
-                </button>
+                </Link>
               </li>
             </ul>
           </div>
@@ -108,43 +88,49 @@ export const Footer: React.FC<FooterProps> = ({
             </h3>
             <ul className="mt-3 space-y-2">
               <li>
-                <button type="button" onClick={() => onNavigate('/about')} className={linkCls}>
+                <Link href={'/about'} onNavigate={onNavigate} className={linkCls}>
                   About Us
-                </button>
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => onNavigate('/contact')} className={linkCls}>
+                <Link href={'/contact'} onNavigate={onNavigate} className={linkCls}>
                   Contact Us
-                </button>
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => onNavigate('/privacy')} className={linkCls}>
+                <Link href={'/privacy'} onNavigate={onNavigate} className={linkCls}>
                   Privacy Policy
-                </button>
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => onNavigate('/cookie-policy')} className={linkCls}>
+                <Link href={'/editorial-policy'} onNavigate={onNavigate} className={linkCls}>
+                  Editorial Policy
+                </Link>
+              </li>
+              <li>
+                <Link href={'/corrections-policy'} onNavigate={onNavigate} className={linkCls}>
+                  Corrections Policy
+                </Link>
+              </li>
+              <li>
+                <Link href={'/cookie-policy'} onNavigate={onNavigate} className={linkCls}>
                   Cookie Policy
-                </button>
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => onNavigate('/terms')} className={linkCls}>
-                  Terms &amp; Conditions
-                </button>
+                <Link href={'/terms'} onNavigate={onNavigate} className={linkCls}>
+                  Terms of Use
+                </Link>
               </li>
               <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/affiliate-disclosure')}
-                  className={linkCls}
-                >
-                  Affiliate Disclosure
-                </button>
+                <Link href={'/affiliate-disclosure'} onNavigate={onNavigate} className={linkCls}>
+                  Advertising &amp; Affiliate Disclosure
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => onNavigate('/disclaimer')} className={linkCls}>
+                <Link href={'/disclaimer'} onNavigate={onNavigate} className={linkCls}>
                   Disclaimer
-                </button>
+                </Link>
               </li>
               <li>
                 <button
@@ -152,7 +138,7 @@ export const Footer: React.FC<FooterProps> = ({
                   onClick={onOpenCookieSettings}
                   className={linkCls}
                 >
-                  Cookie Preferences
+                  Cookie settings
                 </button>
               </li>
             </ul>
@@ -161,19 +147,18 @@ export const Footer: React.FC<FooterProps> = ({
 
         <div className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
           <p>
-            © {new Date().getFullYear()} SkyFare Media LLC · 548 Market St, San Francisco, CA 94104
+            © {new Date().getFullYear()} {owner || general?.siteName || 'SkyFare'}
+            {general?.supportEmail && (
+              <>
+                {' · '}
+                <a href={`mailto:${general.supportEmail}`} className="underline">{general.supportEmail}</a>
+              </>
+            )}
           </p>
           <div className="flex flex-wrap items-center gap-4">
-            <span>
-              Data partners: Amadeus, Travelpayouts, Skyscanner &amp; Expedia Affiliate Network
-            </span>
-            <button
-              type="button"
-              onClick={() => onNavigate('/admin')}
-              className="text-slate-500 dark:text-slate-400 hover:text-[#0B1F3A] dark:hover:text-white underline cursor-pointer"
-            >
-              Staff Admin
-            </button>
+            <Link href={'/admin'} onNavigate={onNavigate} className="text-slate-500 dark:text-slate-400 hover:text-[#0B1F3A] dark:hover:text-white underline cursor-pointer">
+              Staff sign-in
+            </Link>
           </div>
         </div>
       </div>

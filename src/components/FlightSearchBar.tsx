@@ -241,7 +241,7 @@ export const FlightSearchBar: React.FC<FlightSearchBarProps> = ({
           <div className="md:col-span-2">
             <button
               type="submit"
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors cursor-pointer min-h-[42px]"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-orange-700 hover:bg-orange-800 px-4 py-2.5 text-sm font-semibold text-white transition-colors cursor-pointer min-h-[42px]"
             >
               <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span>Find Deals</span>
@@ -285,7 +285,7 @@ export const FlightSearchBar: React.FC<FlightSearchBarProps> = ({
             onClick={() => onChange({ ...query, quickMode: tab.id })}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               query.quickMode === tab.id
-                ? 'bg-[#0B1F3A] dark:bg-sky-600 text-white'
+                ? 'bg-[#0B1F3A] dark:bg-sky-700 text-white'
                 : 'bg-slate-100 dark:bg-[#081222] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800'
             }`}
           >

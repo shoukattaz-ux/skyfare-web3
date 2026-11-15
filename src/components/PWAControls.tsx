@@ -63,7 +63,7 @@ export const PWAInstallButton: React.FC<{ variant?: 'compact' | 'button' }> = ({
               <button
                 type="button"
                 onClick={() => setShowIOSGuide(false)}
-                className="mt-5 w-full rounded-lg bg-[#0B1F3A] dark:bg-sky-600 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+                className="mt-5 w-full rounded-lg bg-[#0B1F3A] dark:bg-sky-700 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
               >
                 Close
               </button>

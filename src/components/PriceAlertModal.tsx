@@ -112,7 +112,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                 setSuccessMsg('');
                 onClose();
               }}
-              className="mt-4 w-full rounded-lg bg-[#0B1F3A] dark:bg-sky-600 py-2.5 text-xs font-semibold text-white"
+              className="mt-4 w-full rounded-lg bg-[#0B1F3A] dark:bg-sky-700 py-2.5 text-xs font-semibold text-white"
             >
               Done
             </button>
@@ -195,7 +195,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-lg bg-orange-600 hover:bg-orange-700 disabled:opacity-60 py-2.5 text-sm font-semibold text-white transition-colors cursor-pointer"
+              className="w-full rounded-lg bg-orange-700 hover:bg-orange-800 disabled:opacity-60 py-2.5 text-sm font-semibold text-white transition-colors cursor-pointer"
             >
               {submitting ? 'Saving Alert...' : 'Activate Price Alert'}
             </button>

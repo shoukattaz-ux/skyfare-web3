@@ -18,12 +18,14 @@ import type {
 } from '../types/flight';
 import { DESTINATIONS } from '../data/destinations';
 import { TRAVEL_GUIDES } from '../data/guides';
-import { getImageSrc } from '../lib/images';
+import { getImageAlt, getImageSrc, getLargeImageSrc } from '../lib/images';
 import { FlightSearchBar, type SearchQueryState } from '../components/FlightSearchBar';
 import { DealsExplorer } from '../components/DealsExplorer';
 import { FlexibleCalendar } from '../components/FlexibleCalendar';
-import { LeaderboardAd, RevcontentWidget } from '../components/AdSlots';
+import { RelatedGuides } from '../components/AdSlots';
+import { useSiteConfig } from '../lib/siteConfig';
 import { PWAInstallButton } from '../components/PWAControls';
+import { Link } from '../components/Link';
 
 interface HomePageProps {
   deals: FlightDeal[];
@@ -81,12 +83,14 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const heroSubtitle =
     lockedCategory === 'domestic'
-      ? 'Compare verified nonstop and 1-stop US fares across New York, Miami, Los Angeles, Seattle, and Honolulu with transparent carry-on and seat rules.'
+      ? 'Example fares on US domestic routes, each showing the date it was recorded, the baggage allowance and the number of stops.'
       : lockedCategory === 'international'
-      ? 'Save 45% to 60% on round-trip flights from American airports to Mexico, Europe, and Japan—vetted via accredited airline data feeds.'
+      ? 'Example fares from US airports to Mexico, Europe and Asia, each showing the date it was recorded, the baggage allowance and the number of stops.'
       : homepage?.heroSubtitle ||
-        'Verified domestic and international airfare drops from major US airports, complete with carry-on rules, stops, and real booking windows.';
+        'Plain-English airfare guides, plus a hand-kept list of example fares from US airports with the date, baggage allowance and booking link for each.';
 
+  const { general } = useSiteConfig();
+  const alertsEnabled = general?.emailAlertsEnabled === true;
   const activeGuides = guides && guides.length > 0 ? guides : TRAVEL_GUIDES;
   const topWeeklyDeals = deals.filter((d) => d.isTopWeekly).slice(0, 3);
 
@@ -104,9 +108,13 @@ export const HomePage: React.FC<HomePageProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: newsletterEmail }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNewsletterStatus(data.error || 'Unable to subscribe right now. Please try again.');
+        return;
+      }
       setNewsletterStatus(
-        data.message || 'Subscribed! Expect our weekly Tuesday fare digest.'
+        data.message || 'Thanks, you are on the list.'
       );
       setNewsletterEmail('');
     } catch {
@@ -116,20 +124,20 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const faqs = [
     {
-      q: 'How does SkyFare find cheap flights without scraping airlines?',
-      a: 'SkyFare integrates with legitimate aviation APIs and accredited affiliate networks—including Amadeus, Travelpayouts, Skyscanner, and Expedia Partner Solutions—to surface genuine fare drops while respecting airline terms.',
+      q: 'Where do the fares on this site come from?',
+      a: 'An editor records each fare by hand from a public booking page and notes the date. There is no live feed behind the list, which is why every card shows when the price was seen and why the price at checkout may differ.',
     },
     {
-      q: 'Why do you display baggage policies on every deal card?',
-      a: 'A $79 ultra-low-cost base fare can double at checkout once a carry-on is added. Showing exact personal item, carry-on, and checked bag rules upfront helps you compare true total trip costs.',
+      q: 'Why does every fare card show baggage rules?',
+      a: 'A low base fare can rise sharply once a carry-on or checked bag is added. Showing the allowance next to the price makes it easier to compare the real total.',
     },
     {
-      q: 'Can prices change after I click View Deal?',
-      a: 'Yes. Airline seat buckets update in real time. Each card lists a "Last updated" timestamp and honest remaining offer window, and partner checkout always confirms final live inventory.',
+      q: 'Can the price change after I click through?',
+      a: 'Yes, and it often does. Airlines change prices constantly and seats sell out. The booking site shows the only price that counts.',
     },
     {
-      q: 'Are there any extra fees for using SkyFare?',
-      a: 'No. SkyFare is 100% free for travelers. We earn a small affiliate commission from travel partners when you book, at zero markup to your ticket price.',
+      q: 'Do you charge anything, and how do you make money?',
+      a: 'Using the site is free and we add no markup. Some booking links are affiliate links, so we may earn a commission if you buy; the site may also show advertising. See the Advertising and Affiliate Disclosure.',
     },
   ];
 
@@ -139,9 +147,12 @@ export const HomePage: React.FC<HomePageProps> = ({
       <section className="relative overflow-hidden bg-[#071120] text-white">
         <div className="absolute inset-0">
           <img
-            src={getImageSrc('hero')}
-            alt="Commercial passenger aircraft wing above sunlit clouds at golden hour"
-            referrerPolicy="no-referrer"
+            src={getLargeImageSrc('hero')}
+            alt=""
+            width={1280}
+            height={714}
+            fetchPriority="high"
+            decoding="async"
             className="h-full w-full object-cover object-center opacity-70"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#071120]/85 via-[#071120]/65 to-[#071120]/95" />
@@ -150,7 +161,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-10 pb-12 sm:pt-14 sm:pb-16">
           <div className="max-w-3xl">
             <p className="text-xs font-medium tracking-wide text-sky-300">
-              SkyFare · Fly more. Pay less. · Verified US Airfare Watch
+              Airfare guides and dated fare examples · US airports
             </p>
             <h1
               className="mt-2 font-display font-bold tracking-tight text-white leading-[1.12]"
@@ -181,23 +192,19 @@ export const HomePage: React.FC<HomePageProps> = ({
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-sm">
           <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-600 dark:text-slate-300">
             <span className="font-semibold text-[#0B1F3A] dark:text-white">
-              32 active routes
+              {deals.length} example fares
             </span>
             <span aria-hidden="true">·</span>
-            <span>Amadeus &amp; Travelpayouts feeds</span>
+            <span>Dated snapshots, not live quotes</span>
             <span aria-hidden="true">·</span>
-            <span>Prices may change</span>
+            <span>Confirm the price at checkout</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onNavigate('/search')}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
+            <Link href={'/search'} onNavigate={onNavigate} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer">
               <Search className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
               <span>Site Search</span>
-            </button>
+            </Link>
 
             <button
               type="button"
@@ -255,13 +262,6 @@ export const HomePage: React.FC<HomePageProps> = ({
           />
         )}
 
-        {/* Reserved Header Leaderboard Ad Slot */}
-        <LeaderboardAd
-          slotId="skyfare-top-leaderboard"
-          adPlacements={adPlacements}
-          monetization={monetization}
-        />
-
         {/* Top Deals This Week (only on main home page) */}
         {!lockedCategory && (homepage ? homepage.showTopWeekly : true) && (
           <section aria-label="Top Deals This Week" className="space-y-4">
@@ -271,33 +271,32 @@ export const HomePage: React.FC<HomePageProps> = ({
                   Top Deals This Week
                 </h2>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Hand-verified steepest percentage drops across nonstop routes.
+                  Fares our editors flagged as notable, each with the date it was recorded.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={onOpenAlerts}
-                className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline inline-flex items-center gap-1"
-              >
-                <span>Get alerts for deals like these</span>
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
+              {alertsEnabled && (
+                <button
+                  type="button"
+                  onClick={onOpenAlerts}
+                  className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline inline-flex items-center gap-1"
+                >
+                  <span>Get alerts for deals like these</span>
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {topWeeklyDeals.map((deal) => (
-                <button
-                  key={deal.id}
-                  type="button"
-                  onClick={() => onNavigate(`/destinations/${deal.destinationSlug}`)}
-                  className="group text-left rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] hover:border-sky-500/50 transition-all"
-                >
+                <Link href={`/destinations/${deal.destinationSlug}`} onNavigate={onNavigate} key={deal.id} className="group text-left rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] hover:border-sky-500/50 transition-all">
                   <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-200 dark:bg-slate-800">
                     <img
                       src={getImageSrc(deal.imageKey)}
-                      alt={`${deal.destinationCity} travel destination skyline`}
+                      alt={getImageAlt(deal.imageKey)}
+                      width={720}
+                      height={538}
                       loading="lazy"
-                      referrerPolicy="no-referrer"
+                      decoding="async"
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
@@ -312,13 +311,13 @@ export const HomePage: React.FC<HomePageProps> = ({
                         <div className="text-xl font-bold font-mono-tabular">
                           ${deal.price}
                         </div>
-                        <div className="text-[11px] text-emerald-300 font-medium">
-                          Save {deal.discountPercent}%
+                        <div className="text-[11px] text-slate-200">
+                          {deal.tripType.toLowerCase()} · recorded {deal.lastUpdated.slice(5, 10).replace('-', '/')}
                         </div>
                       </div>
                     </div>
                   </div>
-                </button>
+                </Link>
               ))}
             </div>
           </section>
@@ -346,19 +345,14 @@ export const HomePage: React.FC<HomePageProps> = ({
                 Explore Cheap Flights by Destination
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Dedicated city guides with airport transfer tips, cheapest months, and live routes.
+                City pages with airport tips, typical cheapest months and flight times.
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
             {DESTINATIONS.map((dest) => (
-              <button
-                key={dest.slug}
-                type="button"
-                onClick={() => onNavigate(`/destinations/${dest.slug}`)}
-                className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-3.5 hover:border-sky-500/50 transition-colors cursor-pointer"
-              >
+              <Link href={`/destinations/${dest.slug}`} onNavigate={onNavigate} key={dest.slug} className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-3.5 hover:border-sky-500/50 transition-colors cursor-pointer">
                 <div className="text-xs text-slate-500 dark:text-slate-400">
                   {dest.country}
                 </div>
@@ -366,105 +360,58 @@ export const HomePage: React.FC<HomePageProps> = ({
                   {dest.city}
                 </div>
                 <div className="mt-2 text-xs font-mono-tabular font-semibold text-sky-700 dark:text-sky-400">
-                  From ${dest.startingPrice}
+                  Typical from ${dest.startingPrice}
                 </div>
-              </button>
+              </Link>
             ))}
           </div>
         </section>
         )}
 
-        {/* How It Works + Trust Signals & Testimonials */}
-        {(homepage ? homepage.showTestimonials : true) && (
-        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 sm:p-8 space-y-8">
+        {/* How the site works */}
+        {(homepage ? homepage.showHowItWorks !== false : true) && (
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 sm:p-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div>
-              <h2 className="text-xl font-bold text-[#0B1F3A] dark:text-white">
-                How SkyFare Verifies Every Fare
-              </h2>
+              <h2 className="text-xl font-bold text-[#0B1F3A] dark:text-white">How to read the fares here</h2>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                We combine real-time aviation partner feeds with editorial checks—so you never waste time clicking expired ghost fares or surprise bag markups.
+                We are a publication, not an airline or a booking engine. Fares are example prices that an editor
+                recorded by hand, so every card carries its date.
               </p>
-              <div className="mt-4 text-xs text-slate-500 dark:text-slate-400">
-                Data &amp; Booking Partners: Amadeus · Travelpayouts · Skyscanner · Expedia
-              </div>
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                Read our{' '}
+                <Link href="/editorial-policy" onNavigate={onNavigate} className="underline">Editorial Policy</Link>{' '}
+                and{' '}
+                <Link href="/disclaimer" onNavigate={onNavigate} className="underline">Disclaimer</Link>.
+              </p>
             </div>
 
-            <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <div className="rounded-xl bg-slate-50 dark:bg-[#0B1526] p-4 border border-slate-200/70 dark:border-slate-800">
-                <div className="text-xs font-mono-tabular font-semibold text-sky-700 dark:text-sky-400">
-                  01. Fare Monitoring
-                </div>
-                <h3 className="mt-1.5 text-sm font-semibold text-[#0B1F3A] dark:text-white">
-                  Track US Hub Drops
-                </h3>
-                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  We monitor 35+ major US airports against 90-day median fares to spot genuine 40%–60% drops.
-                </p>
-              </div>
-              <div className="rounded-xl bg-slate-50 dark:bg-[#0B1526] p-4 border border-slate-200/70 dark:border-slate-800">
-                <div className="text-xs font-mono-tabular font-semibold text-sky-700 dark:text-sky-400">
-                  02. Policy Check
-                </div>
-                <h3 className="mt-1.5 text-sm font-semibold text-[#0B1F3A] dark:text-white">
-                  Audit Baggage &amp; Layovers
-                </h3>
-                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Every deal states cabin class, stops, duration, and carry-on inclusion before you leave SkyFare.
-                </p>
-              </div>
-              <div className="rounded-xl bg-slate-50 dark:bg-[#0B1526] p-4 border border-slate-200/70 dark:border-slate-800">
-                <div className="text-xs font-mono-tabular font-semibold text-sky-700 dark:text-sky-400">
-                  03. Direct Booking
-                </div>
-                <h3 className="mt-1.5 text-sm font-semibold text-[#0B1F3A] dark:text-white">
-                  Zero SkyFare Markup
-                </h3>
-                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Click View Deal to complete checkout securely on trusted partner booking platforms.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-slate-200 dark:border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <blockquote className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              <p>
-                "Booked two nonstop ANA tickets from LAX to Tokyo Haneda for $589 each with two free checked bags—saved $1,140 compared to our previous search."
-              </p>
-              <footer className="mt-2 font-semibold text-[#0B1F3A] dark:text-white">
-                Hannah Morales · Product Designer, Los Angeles
-              </footer>
-            </blockquote>
-            <blockquote className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              <p>
-                "Having the carry-on policy printed right on the card stopped me from overpaying on an unbundled fare out of Chicago O'Hare to Miami."
-              </p>
-              <footer className="mt-2 font-semibold text-[#0B1F3A] dark:text-white">
-                Devon Brooks · Graduate Student, Chicago
-              </footer>
-            </blockquote>
-            <blockquote className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              <p>
-                "Our family of four caught a $188 Dallas-to-Cancun nonstop drop via SkyFare price alerts and locked seats within two hours."
-              </p>
-              <footer className="mt-2 font-semibold text-[#0B1F3A] dark:text-white">
-                Rachel &amp; Sam Patel · Dallas, TX
-              </footer>
-            </blockquote>
+            <ol className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-5">
+              {[
+                ['01', 'Check the date', 'Each fare shows when it was recorded. Airline prices change many times a day, so treat a fare as a pointer, not a promise.'],
+                ['02', 'Read the baggage line', 'Every card states the carry-on and checked-bag allowance so you can compare the total cost, not just the base fare.'],
+                ['03', 'Confirm at checkout', 'The booking link opens a third-party site. Its price at checkout is the only price that counts. Some links are affiliate links.'],
+              ].map(([n, title, text]) => (
+                <li key={n} className="rounded-xl bg-slate-50 dark:bg-[#0B1526] p-4 border border-slate-200/70 dark:border-slate-800">
+                  <div className="text-xs font-mono-tabular font-semibold text-sky-700 dark:text-sky-400">{n}</div>
+                  <h3 className="mt-1.5 text-sm font-semibold text-[#0B1F3A] dark:text-white">{title}</h3>
+                  <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{text}</p>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
         )}
 
         {/* Newsletter & Price Alert Split */}
-        {(homepage ? homepage.showNewsletter : true) && (
+        {alertsEnabled && (homepage ? homepage.showNewsletter : true) && (
         <section className="rounded-2xl bg-[#0B1F3A] text-white p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold">
-              Never Miss a Sub-$200 Domestic or $450 Europe Drop
+              Get new fare roundups by email
             </h2>
             <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-              Join 42,000+ US travelers receiving our Tuesday &amp; Friday verified airfare digest. Zero spam, unsubscribe anytime.
+              Occasional emails with new guides and notable fares. Unsubscribe at any time.
             </p>
           </div>
           <div>
@@ -486,7 +433,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                 />
                 <button
                   type="submit"
-                  className="rounded-xl bg-orange-600 hover:bg-orange-700 px-5 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  className="rounded-xl bg-orange-700 hover:bg-orange-800 px-5 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   Subscribe Free
                 </button>
@@ -504,16 +451,12 @@ export const HomePage: React.FC<HomePageProps> = ({
                 Airfare Playbooks &amp; Travel Guides
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                {activeGuides.length} practical guides written by aviation analysts to help you keep more of your budget.
+                {activeGuides.length} guides on booking timing, baggage fees, airline policies and passenger rights.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => onNavigate('/guides')}
-              className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline whitespace-nowrap shrink-0 cursor-pointer"
-            >
+            <Link href={'/guides'} onNavigate={onNavigate} className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline whitespace-nowrap shrink-0 cursor-pointer">
               View all {activeGuides.length} guides →
-            </button>
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -526,9 +469,11 @@ export const HomePage: React.FC<HomePageProps> = ({
                   <div className="aspect-[4/3] w-full overflow-hidden bg-slate-200 dark:bg-slate-800">
                     <img
                       src={guide.customImageUrl || getImageSrc(guide.imageKey)}
-                      alt={guide.title}
+                      alt={guide.imageAlt || getImageAlt(guide.imageKey)}
+                      width={720}
+                      height={538}
                       loading="lazy"
-                      referrerPolicy="no-referrer"
+                      decoding="async"
                       className="h-full w-full object-cover"
                     />
                   </div>
@@ -537,13 +482,9 @@ export const HomePage: React.FC<HomePageProps> = ({
                       {guide.category} · {guide.readTimeMinutes} min read
                     </div>
                     <h3 className="mt-1.5 text-base font-bold text-[#0B1F3A] dark:text-white leading-snug">
-                      <button
-                        type="button"
-                        onClick={() => onNavigate(`/guides/${guide.slug}`)}
-                        className="text-left hover:text-sky-600 dark:hover:text-sky-400 transition-colors"
-                      >
+                      <Link href={`/guides/${guide.slug}`} onNavigate={onNavigate} className="text-left hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
                         {guide.title}
-                      </button>
+                      </Link>
                     </h3>
                     <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-3">
                       {guide.excerpt}
@@ -551,13 +492,9 @@ export const HomePage: React.FC<HomePageProps> = ({
                   </div>
                 </div>
                 <div className="px-5 pb-5">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate(`/guides/${guide.slug}`)}
-                    className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline"
-                  >
+                  <Link href={`/guides/${guide.slug}`} onNavigate={onNavigate} className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline">
                     Read full guide →
-                  </button>
+                  </Link>
                 </div>
               </article>
             ))}
@@ -597,13 +534,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         </section>
         )}
 
-        {/* Revcontent Native Recommendation Widget */}
-        <RevcontentWidget
-          onNavigate={onNavigate}
-          adPlacements={adPlacements}
-          monetization={monetization}
-          guides={activeGuides}
-        />
+        <RelatedGuides guides={activeGuides.slice(3)} onNavigate={onNavigate} title="More guides" />
       </div>
     </div>
   );

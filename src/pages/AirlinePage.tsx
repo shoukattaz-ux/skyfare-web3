@@ -4,7 +4,7 @@ import type { FlightDeal } from '../types/flight';
 import { AIRLINES, getAirlineBySlug } from '../data/airlines';
 import { AirlineLogo } from '../components/AirlineLogo';
 import { DealCard } from '../components/DealCard';
-import { LeaderboardAd } from '../components/AdSlots';
+import { Link } from '../components/Link';
 
 interface AirlinePageProps {
   slug: string;
@@ -29,13 +29,9 @@ export const AirlinePage: React.FC<AirlinePageProps> = ({
         <h1 className="text-2xl font-bold text-[#0B1F3A] dark:text-white">
           Airline Not Found
         </h1>
-        <button
-          type="button"
-          onClick={() => onNavigate('/')}
-          className="mt-6 rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white"
-        >
+        <Link href={'/'} onNavigate={onNavigate} className="mt-6 rounded-lg bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white">
           Back to All Deals
-        </button>
+        </Link>
       </div>
     );
   }
@@ -45,14 +41,10 @@ export const AirlinePage: React.FC<AirlinePageProps> = ({
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-10">
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-        <button
-          type="button"
-          onClick={() => onNavigate('/')}
-          className="hover:text-[#0B1F3A] dark:hover:text-white inline-flex items-center gap-1"
-        >
+        <Link href={'/'} onNavigate={onNavigate} className="hover:text-[#0B1F3A] dark:hover:text-white inline-flex items-center gap-1">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Home</span>
-        </button>
+        </Link>
         <span aria-hidden="true">/</span>
         <span className="font-medium text-slate-800 dark:text-slate-200">
           {airline.name} Deals
@@ -116,13 +108,16 @@ export const AirlinePage: React.FC<AirlinePageProps> = ({
         </div>
       </section>
 
-      <LeaderboardAd slotId={`airline-${airline.slug}-banner`} />
-
       {/* Airline Deals */}
       <section className="space-y-4">
         <h2 className="text-xl font-bold text-[#0B1F3A] dark:text-white">
-          Current {airline.name} Fare Drops ({airlineDeals.length})
+          Example {airline.name} fares ({airlineDeals.length})
         </h2>
+        {airlineDeals.length === 0 && (
+          <p className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 text-sm text-slate-600 dark:text-slate-300">
+            We have no example fares recorded for {airline.name} right now. The baggage and policy notes above still apply.
+          </p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {airlineDeals.map((deal) => (
             <DealCard
@@ -143,14 +138,9 @@ export const AirlinePage: React.FC<AirlinePageProps> = ({
         </h2>
         <div className="flex flex-wrap gap-2.5">
           {AIRLINES.filter((a) => a.slug !== airline.slug).map((other) => (
-            <button
-              key={other.slug}
-              type="button"
-              onClick={() => onNavigate(`/airlines/${other.slug}`)}
-              className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:border-sky-500/50 transition-colors"
-            >
+            <Link href={`/airlines/${other.slug}`} onNavigate={onNavigate} key={other.slug} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:border-sky-500/50 transition-colors">
               {other.name} ({other.code})
-            </button>
+            </Link>
           ))}
         </div>
       </section>

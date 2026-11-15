@@ -65,6 +65,8 @@ interface DashboardPayload {
   };
   deals: (FlightDeal & { status?: string })[];
   guides: TravelGuide[];
+  authors?: { id: number; name: string; role: string; bio: string; active: number }[];
+  feedback?: { slug: string; helpful: number; not_helpful: number }[];
   categories: CategoryRecord[];
   media: MediaAssetRecord[];
   adPlacements: AdPlacementConfig[];
@@ -79,7 +81,9 @@ interface DashboardPayload {
   homepage: HomepageConfig;
 }
 
-const IMAGE_KEYS: ImageKey[] = ['hero', 'nyc', 'cancun', 'tokyo', 'paris', 'terminal'];
+import { GuideEditor, type AdminGuide } from './admin/GuideEditor';
+import { MonetizationPanel } from './admin/MonetizationPanel';
+import { AuthorsPanel } from './admin/AuthorsPanel';
 
 export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged }) => {
   const [auth, setAuth] = useState<AuthSession | null>(null);
@@ -92,25 +96,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [bannerMsg, setBannerMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-
-  // --- Guide editor state ---
-  const [guideForm, setGuideForm] = useState({
-    slug: '',
-    title: '',
-    metaTitle: '',
-    metaDescription: '',
-    category: 'Booking Strategy',
-    tags: 'cheap flights, usa travel',
-    author: 'Elena Vance',
-    readTimeMinutes: 6,
-    wordCount: 1100,
-    imageKey: 'terminal' as ImageKey,
-    customImageUrl: '',
-    status: 'published' as 'published' | 'draft',
-    excerpt: '',
-    sectionHeading: 'Key Airfare Findings',
-    sectionBody: '',
-  });
 
   // --- Deal editor state ---
   const [dealForm, setDealForm] = useState({
@@ -139,6 +124,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
   });
 
   // --- Category & User forms ---
+  const [uploadAlt, setUploadAlt] = useState('');
+  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '' });
   const [catName, setCatName] = useState('');
   const [catDesc, setCatDesc] = useState('');
   const [newUser, setNewUser] = useState({ email: '', name: '', role: 'editor', password: '' });
@@ -147,8 +134,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
   const [generalForm, setGeneralForm] = useState<SiteGeneralSettings | null>(null);
   const [homepageForm, setHomepageForm] = useState<HomepageConfig | null>(null);
   const [menusForm, setMenusForm] = useState<MenuItem[]>([]);
-  const [monetizationForm, setMonetizationForm] = useState<MonetizationSettings | null>(null);
-  const [placementsForm, setPlacementsForm] = useState<AdPlacementConfig[]>([]);
   const [selectedLegalSlug, setSelectedLegalSlug] = useState('privacy');
   const [legalDraft, setLegalDraft] = useState<LegalPageRecord | null>(null);
 
@@ -161,8 +146,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
       setGeneralForm(data.general);
       setHomepageForm(data.homepage);
       setMenusForm(data.menus || []);
-      setMonetizationForm(data.monetization);
-      setPlacementsForm(data.adPlacements || []);
       const firstLegal =
         data.legalPages.find((p) => p.slug === selectedLegalSlug) || data.legalPages[0] || null;
       setLegalDraft(firstLegal);
@@ -181,7 +164,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
 
   useEffect(() => {
     fetch('/api/auth/me')
-      .then((r) => (r.ok ? r.json() : null))
+      // Always read the body, even for a 401, so the request completes cleanly.
+      .then((r) => r.json().then((d) => (r.ok ? d : null)).catch(() => null))
       .then((data) => {
         if (data?.user) {
           setAuth(data);
@@ -239,82 +223,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
   };
 
   // --- CRUD Handlers ---
-  const saveGuide = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      const paragraphs = guideForm.sectionBody
-        .split(/\n{2,}/)
-        .map((p) => p.trim())
-        .filter(Boolean);
-      const res = await authedFetch('/api/admin/guides', {
-        method: 'POST',
-        body: JSON.stringify({
-          slug: guideForm.slug || undefined,
-          title: guideForm.title,
-          metaTitle: guideForm.metaTitle || guideForm.title,
-          metaDescription: guideForm.metaDescription || guideForm.excerpt,
-          category: guideForm.category,
-          tags: guideForm.tags,
-          author: guideForm.author,
-          readTimeMinutes: guideForm.readTimeMinutes,
-          wordCount: guideForm.wordCount,
-          imageKey: guideForm.imageKey,
-          customImageUrl: guideForm.customImageUrl || undefined,
-          status: guideForm.status,
-          excerpt: guideForm.excerpt,
-          sections: [
-            {
-              heading: guideForm.sectionHeading || 'Guide Details',
-              paragraphs: paragraphs.length > 0 ? paragraphs : [guideForm.excerpt || guideForm.title],
-            },
-          ],
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        notify(false, data.error || 'Could not save article.');
-      } else {
-        notify(true, `Saved guide "${data.guide.title}".`);
-        await loadDashboard(auth?.user.role);
-        onDataChanged();
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const editExistingGuide = (g: TravelGuide) => {
-    setGuideForm({
-      slug: g.slug,
-      title: g.title,
-      metaTitle: g.metaTitle,
-      metaDescription: g.metaDescription,
-      category: g.category,
-      tags: g.tags || '',
-      author: g.author,
-      readTimeMinutes: g.readTimeMinutes,
-      wordCount: g.wordCount,
-      imageKey: g.imageKey,
-      customImageUrl: g.customImageUrl || '',
-      status: g.status || 'published',
-      excerpt: g.excerpt,
-      sectionHeading: g.sections?.[0]?.heading || 'Overview',
-      sectionBody: (g.sections || [])
-        .map((s) => s.paragraphs.join('\n\n'))
-        .join('\n\n'),
-    });
-  };
-
-  const deleteGuide = async (slug: string) => {
-    const res = await authedFetch(`/api/admin/guides/${slug}`, { method: 'DELETE' });
-    if (res.ok) {
-      notify(true, `Deleted guide "${slug}".`);
-      await loadDashboard(auth?.user.role);
-      onDataChanged();
-    }
-  };
-
   const saveDeal = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -371,7 +279,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    const input = e.target;
     if (!file) return;
+    if (uploadAlt.trim().length < 5) {
+      notify(false, 'Describe the image first (alt text, at least 5 characters), then choose the file.');
+      input.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = async () => {
       const base64Data = String(reader.result || '');
@@ -381,7 +295,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
           filename: file.name,
           mimeType: file.type || 'image/jpeg',
           base64Data,
-          altText: file.name.replace(/\.[^.]+$/, ''),
+          altText: uploadAlt.trim(),
         }),
       });
       const data = await res.json();
@@ -389,6 +303,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
         notify(false, data.error || 'Upload failed.');
       } else {
         notify(true, `Uploaded ${file.name} to Media Library.`);
+        setUploadAlt('');
+        input.value = '';
         await loadDashboard(auth?.user.role);
       }
     };
@@ -427,29 +343,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
     }
   };
 
-  const saveMonetization = async () => {
-    setBusy(true);
-    try {
-      const res = await authedFetch('/api/admin/ads', {
-        method: 'PUT',
-        body: JSON.stringify({
-          monetization: monetizationForm,
-          placements: placementsForm,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        notify(false, data.error || 'Could not update ad settings (Admin role required).');
-      } else {
-        notify(true, 'AdSense, Media.net, Revcontent & /ads.txt settings updated.');
-        await loadDashboard(auth?.user.role);
-        onDataChanged();
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const saveLegalPage = async () => {
     if (!legalDraft) return;
     setBusy(true);
@@ -481,6 +374,27 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
       setUsers(data.users || []);
       setNewUser({ email: '', name: '', role: 'editor', password: '' });
       notify(true, 'Staff user created.');
+    }
+  };
+
+  const updateUser = async (id: number, patch: Record<string, unknown>) => {
+    const res = await authedFetch(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+    const data = await res.json();
+    if (!res.ok) notify(false, data.error || 'Could not update user.');
+    else {
+      setUsers(data.users || []);
+      notify(true, 'User updated.');
+    }
+  };
+
+  const changeOwnPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await authedFetch('/api/auth/change-password', { method: 'POST', body: JSON.stringify(pwForm) });
+    const data = await res.json();
+    if (!res.ok) notify(false, data.error || 'Could not change password.');
+    else {
+      setPwForm({ currentPassword: '', newPassword: '' });
+      notify(true, 'Password changed. Other sessions were signed out.');
     }
   };
 
@@ -544,7 +458,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
             </h1>
           </div>
           <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-            Sign in to manage flight deals, editorial travel guides, Google AdSense / Media.net / Revcontent placements, SEO meta tags, and backups.
+            Sign in to manage flight deals, editorial travel guides, advertising settings, SEO meta tags, and backups.
           </p>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -558,7 +472,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                 required
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="admin@skyfareusa.com"
+                autoComplete="username"
                 className={inputCls}
               />
             </div>
@@ -570,6 +484,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                 id="admin-password"
                 type="password"
                 required
+                autoComplete="current-password"
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 className={inputCls}
@@ -585,7 +500,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
             <button
               type="submit"
               disabled={busy}
-              className="w-full rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-60 py-2.5 text-sm font-semibold text-white transition-colors cursor-pointer"
+              className="w-full rounded-xl bg-orange-700 hover:bg-orange-800 disabled:opacity-60 py-2.5 text-sm font-semibold text-white transition-colors cursor-pointer"
             >
               {busy ? 'Signing in...' : 'Sign In to Dashboard'}
             </button>
@@ -674,7 +589,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
             onClick={() => setTab(t.id)}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
               tab === t.id
-                ? 'bg-[#0B1F3A] dark:bg-sky-600 text-white'
+                ? 'bg-[#0B1F3A] dark:bg-sky-700 text-white'
                 : 'bg-white dark:bg-[#0F1D32] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-500/50'
             }`}
           >
@@ -811,232 +726,23 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
             </div>
           )}
 
-          {/* TAB 2: POSTS & GUIDES CMS */}
+          {/* TAB 2: POSTS & GUIDES CMS (editorial workflow) */}
           {tab === 'guides' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <form
-                onSubmit={saveGuide}
-                className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 space-y-4"
-              >
-                <div className="flex items-center justify-between">
-                  <h2 className="text-base font-bold text-[#0B1F3A] dark:text-white">
-                    {guideForm.slug ? `Edit Guide (${guideForm.slug})` : 'Publish New Travel Guide'}
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setGuideForm({
-                        slug: '',
-                        title: '',
-                        metaTitle: '',
-                        metaDescription: '',
-                        category: dashboard.categories[0]?.name || 'Booking Strategy',
-                        tags: 'cheap flights, usa travel',
-                        author: 'Elena Vance',
-                        readTimeMinutes: 6,
-                        wordCount: 1100,
-                        imageKey: 'terminal',
-                        customImageUrl: '',
-                        status: 'published',
-                        excerpt: '',
-                        sectionHeading: 'Key Airfare Findings',
-                        sectionBody: '',
-                      })
-                    }
-                    className="text-xs text-sky-700 dark:text-sky-400 hover:underline cursor-pointer"
-                  >
-                    + New Blank Article
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2">
-                    <label className={labelCls}>Article Title</label>
-                    <input
-                      type="text"
-                      required
-                      value={guideForm.title}
-                      onChange={(e) => setGuideForm({ ...guideForm, title: e.target.value })}
-                      placeholder="e.g. Best Days to Book Summer Flights to Europe"
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>URL Slug (auto if blank)</label>
-                    <input
-                      type="text"
-                      value={guideForm.slug}
-                      onChange={(e) => setGuideForm({ ...guideForm, slug: e.target.value })}
-                      placeholder="summer-flights-europe"
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Category</label>
-                    <select
-                      value={guideForm.category}
-                      onChange={(e) => setGuideForm({ ...guideForm, category: e.target.value })}
-                      className={inputCls}
-                    >
-                      {dashboard.categories.map((c) => (
-                        <option key={c.id} value={c.name}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Tags (comma separated)</label>
-                    <input
-                      type="text"
-                      value={guideForm.tags}
-                      onChange={(e) => setGuideForm({ ...guideForm, tags: e.target.value })}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Publish Status</label>
-                    <select
-                      value={guideForm.status}
-                      onChange={(e) =>
-                        setGuideForm({ ...guideForm, status: e.target.value as 'published' | 'draft' })
-                      }
-                      className={inputCls}
-                    >
-                      <option value="published">Published (Live)</option>
-                      <option value="draft">Draft (Hidden)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Cover Image Preset</label>
-                    <select
-                      value={guideForm.imageKey}
-                      onChange={(e) =>
-                        setGuideForm({ ...guideForm, imageKey: e.target.value as ImageKey })
-                      }
-                      className={inputCls}
-                    >
-                      {IMAGE_KEYS.map((k) => (
-                        <option key={k} value={k}>
-                          {k}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Custom Media URL (Optional)</label>
-                    <input
-                      type="text"
-                      value={guideForm.customImageUrl}
-                      onChange={(e) => setGuideForm({ ...guideForm, customImageUrl: e.target.value })}
-                      placeholder="/uploads/..."
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>SEO Meta Title (max 70 chars)</label>
-                    <input
-                      type="text"
-                      value={guideForm.metaTitle}
-                      onChange={(e) => setGuideForm({ ...guideForm, metaTitle: e.target.value })}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>SEO Meta Description</label>
-                    <input
-                      type="text"
-                      value={guideForm.metaDescription}
-                      onChange={(e) =>
-                        setGuideForm({ ...guideForm, metaDescription: e.target.value })
-                      }
-                      className={inputCls}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className={labelCls}>Excerpt</label>
-                  <textarea
-                    rows={2}
-                    required
-                    value={guideForm.excerpt}
-                    onChange={(e) => setGuideForm({ ...guideForm, excerpt: e.target.value })}
-                    className={inputCls}
-                  />
-                </div>
-
-                <div>
-                  <label className={labelCls}>Primary Section Heading</label>
-                  <input
-                    type="text"
-                    value={guideForm.sectionHeading}
-                    onChange={(e) => setGuideForm({ ...guideForm, sectionHeading: e.target.value })}
-                    className={inputCls}
-                  />
-                </div>
-
-                <div>
-                  <label className={labelCls}>Article Body (Separate paragraphs with blank lines)</label>
-                  <textarea
-                    rows={6}
-                    required
-                    value={guideForm.sectionBody}
-                    onChange={(e) => setGuideForm({ ...guideForm, sectionBody: e.target.value })}
-                    className={inputCls}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="inline-flex items-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white cursor-pointer"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>{busy ? 'Saving...' : 'Save & Publish Article'}</span>
-                </button>
-              </form>
-
-              <div className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5 space-y-3">
-                <h2 className="text-base font-bold text-[#0B1F3A] dark:text-white">
-                  All Guides ({dashboard.guides.length})
-                </h2>
-                <div className="space-y-2.5 max-h-[680px] overflow-y-auto pr-1">
-                  {dashboard.guides.map((g) => (
-                    <div
-                      key={g.slug}
-                      className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-start justify-between gap-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {g.category} · {g.status || 'published'}
-                        </div>
-                        <div className="text-xs font-semibold text-[#0B1F3A] dark:text-white truncate">
-                          {g.title}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => editExistingGuide(g)}
-                          className="rounded border border-slate-300 dark:border-slate-700 px-2 py-1 text-[11px] font-medium hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteGuide(g.slug)}
-                          aria-label={`Delete ${g.title}`}
-                          className="rounded border border-red-200 dark:border-red-900/50 p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <GuideEditor
+              guides={dashboard.guides as AdminGuide[]}
+              authors={dashboard.authors || []}
+              categories={dashboard.categories}
+              feedback={dashboard.feedback || []}
+              role={auth.user.role}
+              authedFetch={authedFetch}
+              notify={notify}
+              onSaved={async () => {
+                await loadDashboard(auth.user.role);
+                onDataChanged();
+              }}
+              inputCls={inputCls}
+              labelCls={labelCls}
+            />
           )}
 
           {/* TAB 3: FLIGHT DEALS */}
@@ -1184,7 +890,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                 <button
                   type="submit"
                   disabled={busy}
-                  className="inline-flex items-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-orange-700 hover:bg-orange-800 px-5 py-2.5 text-sm font-semibold text-white cursor-pointer"
                 >
                   <Plus className="h-4 w-4" />
                   <span>{busy ? 'Saving...' : 'Save Flight Deal'}</span>
@@ -1287,7 +993,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                   />
                   <button
                     type="submit"
-                    className="rounded-lg bg-orange-600 hover:bg-orange-700 px-4 py-2 text-xs font-semibold text-white cursor-pointer"
+                    className="rounded-lg bg-orange-700 hover:bg-orange-800 px-4 py-2 text-xs font-semibold text-white cursor-pointer"
                   >
                     Add Category
                   </button>
@@ -1317,16 +1023,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                   <h2 className="text-base font-bold text-[#0B1F3A] dark:text-white">
                     Media Library ({dashboard.media.length})
                   </h2>
-                  <label className="inline-flex items-center gap-1.5 rounded-lg bg-[#0B1F3A] dark:bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white cursor-pointer hover:opacity-90">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <label htmlFor="upload-alt" className={labelCls}>Image description (alt text, required)</label>
+                      <input id="upload-alt" value={uploadAlt} onChange={(e) => setUploadAlt(e.target.value)} className={inputCls} />
+                    </div>
+                  <label className="inline-flex items-center gap-1.5 rounded-lg bg-[#0B1F3A] dark:bg-sky-700 px-3.5 py-2 text-xs font-semibold text-white cursor-pointer hover:opacity-90">
                     <Upload className="h-3.5 w-3.5" />
-                    <span>Upload Image (PNG/JPG/WebP/SVG)</span>
+                    <span>Upload image (PNG/JPG/WebP, max 2 MB)</span>
                     <input
                       type="file"
-                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      accept="image/png,image/jpeg,image/webp"
                       onChange={handleFileUpload}
                       className="hidden"
                     />
                   </label>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1403,7 +1115,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                       [
                         ['showTopWeekly', 'Show Top Deals This Week'],
                         ['showDestinations', 'Show Destination Hub Grid'],
-                        ['showTestimonials', 'Show Traveler Testimonials & Trust Steps'],
+                        ['showHowItWorks', 'Show "How to read the fares" section'],
                         ['showNewsletter', 'Show Newsletter Signup Band'],
                         ['showFaqs', 'Show Frequently Asked Questions'],
                       ] as [keyof HomepageConfig, string][]
@@ -1482,7 +1194,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                 type="button"
                 disabled={busy}
                 onClick={saveSettingsAndHomepage}
-                className="inline-flex items-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-xl bg-orange-700 hover:bg-orange-800 px-5 py-2.5 text-sm font-semibold text-white cursor-pointer"
               >
                 <Save className="h-4 w-4" />
                 <span>Save Menus &amp; Homepage</span>
@@ -1491,166 +1203,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
           )}
 
           {/* TAB 6: MONETIZATION & ADS */}
-          {tab === 'monetization' && monetizationForm && (
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-bold text-[#0B1F3A] dark:text-white">
-                    AdSense, Media.net &amp; Revcontent Monetization
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Values configured here dynamically populate ad slots and generate{' '}
-                    <a
-                      href="/ads.txt"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sky-600 underline font-mono-tabular"
-                    >
-                      /ads.txt
-                    </a>
-                    .
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className={labelCls}>Google AdSense Publisher ID</label>
-                  <input
-                    type="text"
-                    placeholder="pub-0000000000000000"
-                    value={monetizationForm.adsensePublisherId}
-                    onChange={(e) =>
-                      setMonetizationForm({ ...monetizationForm, adsensePublisherId: e.target.value })
-                    }
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Media.net Customer ID</label>
-                  <input
-                    type="text"
-                    placeholder="8CUXXXXXX"
-                    value={monetizationForm.medianetCustomerId}
-                    onChange={(e) =>
-                      setMonetizationForm({ ...monetizationForm, medianetCustomerId: e.target.value })
-                    }
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Media.net Site ID</label>
-                  <input
-                    type="text"
-                    placeholder="Site ID"
-                    value={monetizationForm.medianetSiteId}
-                    onChange={(e) =>
-                      setMonetizationForm({ ...monetizationForm, medianetSiteId: e.target.value })
-                    }
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Revcontent Widget ID</label>
-                  <input
-                    type="text"
-                    placeholder="rc-skyfare-native"
-                    value={monetizationForm.revcontentWidgetId}
-                    onChange={(e) =>
-                      setMonetizationForm({ ...monetizationForm, revcontentWidgetId: e.target.value })
-                    }
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={labelCls}>Additional Authorized Sellers (/ads.txt lines)</label>
-                <textarea
-                  rows={3}
-                  placeholder="Optional custom ads.txt lines..."
-                  value={monetizationForm.adsTxtExtra}
-                  onChange={(e) =>
-                    setMonetizationForm({ ...monetizationForm, adsTxtExtra: e.target.value })
-                  }
-                  className={`${inputCls} font-mono-tabular`}
-                />
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold text-[#0B1F3A] dark:text-white">
-                  Ad Slot Placements (CLS-Safe Fixed Heights)
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {placementsForm.map((p, idx) => (
-                    <div
-                      key={p.slot_id}
-                      className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-xs font-semibold text-[#0B1F3A] dark:text-white">
-                            {p.name}
-                          </div>
-                          <div className="font-mono-tabular text-[11px] text-slate-500">
-                            {p.slot_id} · min {p.min_height}px
-                          </div>
-                        </div>
-                        <label className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(p.enabled)}
-                            onChange={(e) => {
-                              const next = [...placementsForm];
-                              next[idx] = { ...p, enabled: e.target.checked ? 1 : 0 };
-                              setPlacementsForm(next);
-                            }}
-                            className="h-4 w-4 accent-sky-600"
-                          />
-                          <span>Active</span>
-                        </label>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <select
-                          value={p.network}
-                          onChange={(e) => {
-                            const next = [...placementsForm];
-                            next[idx] = { ...p, network: e.target.value };
-                            setPlacementsForm(next);
-                          }}
-                          className={inputCls}
-                        >
-                          <option value="AdSense">Google AdSense</option>
-                          <option value="Media.net">Media.net</option>
-                          <option value="Revcontent">Revcontent</option>
-                        </select>
-                        <input
-                          type="text"
-                          placeholder="Slot / Unit ID"
-                          value={p.ad_unit_code}
-                          onChange={(e) => {
-                            const next = [...placementsForm];
-                            next[idx] = { ...p, ad_unit_code: e.target.value };
-                            setPlacementsForm(next);
-                          }}
-                          className={inputCls}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                disabled={busy}
-                onClick={saveMonetization}
-                className="inline-flex items-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white cursor-pointer"
-              >
-                <Save className="h-4 w-4" />
-                <span>Save Monetization Settings</span>
-              </button>
-            </div>
+          {tab === 'monetization' && (
+            <MonetizationPanel
+              key={JSON.stringify(dashboard.adPlacements) + JSON.stringify(dashboard.monetization)}
+              monetization={dashboard.monetization}
+              placements={dashboard.adPlacements}
+              role={auth.user.role}
+              gscConfigured={Boolean(dashboard.general.gscVerificationCode)}
+              authedFetch={authedFetch}
+              notify={notify}
+              onSaved={async () => {
+                await loadDashboard(auth.user.role);
+                onDataChanged();
+              }}
+              inputCls={inputCls}
+              labelCls={labelCls}
+            />
           )}
 
           {/* TAB 7: SEO & LEGAL PAGES */}
@@ -1669,6 +1237,49 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                     className={inputCls}
                   />
                 </div>
+                <div>
+                  <label htmlFor="gen-publisher" className={labelCls}>Publisher / operator name (shown in About, Privacy and footer)</label>
+                  <input
+                    id="gen-publisher"
+                    type="text"
+                    placeholder="Your real name or registered business name"
+                    value={generalForm.publisherName || ''}
+                    onChange={(e) => setGeneralForm({ ...generalForm, publisherName: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="gen-email" className={labelCls}>Public contact email (must be a mailbox you read)</label>
+                  <input
+                    id="gen-email"
+                    type="email"
+                    value={generalForm.supportEmail}
+                    onChange={(e) => setGeneralForm({ ...generalForm, supportEmail: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="gen-address" className={labelCls}>Postal address (optional; shown only if you fill it in)</label>
+                  <input
+                    id="gen-address"
+                    type="text"
+                    value={generalForm.companyAddress}
+                    onChange={(e) => setGeneralForm({ ...generalForm, companyAddress: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+                <label className="flex items-start gap-2.5 text-xs cursor-pointer rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(generalForm.emailAlertsEnabled)}
+                    onChange={(e) => setGeneralForm({ ...generalForm, emailAlertsEnabled: e.target.checked })}
+                    className="mt-0.5 h-4 w-4 accent-sky-600"
+                  />
+                  <span>
+                    <strong>Enable email sign-ups (newsletter and price alerts).</strong> Turn on only once you have a
+                    way to actually send those emails. While off, the forms are hidden and the server refuses sign-ups.
+                  </span>
+                </label>
                 <div>
                   <label className={labelCls}>Default SEO Title</label>
                   <input
@@ -1717,7 +1328,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                   type="button"
                   disabled={busy}
                   onClick={saveSettingsAndHomepage}
-                  className="rounded-xl bg-orange-600 hover:bg-orange-700 px-5 py-2 text-xs font-semibold text-white cursor-pointer"
+                  className="rounded-xl bg-orange-700 hover:bg-orange-800 px-5 py-2 text-xs font-semibold text-white cursor-pointer"
                 >
                   Save SEO &amp; Analytics Settings
                 </button>
@@ -1772,7 +1383,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                       type="button"
                       disabled={busy}
                       onClick={saveLegalPage}
-                      className="inline-flex items-center gap-2 rounded-xl bg-[#0B1F3A] dark:bg-sky-600 px-5 py-2.5 text-xs font-semibold text-white cursor-pointer"
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#0B1F3A] dark:bg-sky-700 px-5 py-2.5 text-xs font-semibold text-white cursor-pointer"
                     >
                       <Save className="h-3.5 w-3.5" />
                       <span>Update /{legalDraft.slug}</span>
@@ -1826,15 +1437,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                       <input
                         type="password"
                         required
-                        minLength={8}
-                        placeholder="Password (8+ chars)"
+                        minLength={12}
+                        autoComplete="new-password"
+                        placeholder="Password (12+ chars)"
                         value={newUser.password}
                         onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                         className={inputCls}
                       />
                       <button
                         type="submit"
-                        className="sm:col-span-2 rounded-lg bg-orange-600 hover:bg-orange-700 py-2 text-xs font-semibold text-white cursor-pointer"
+                        className="sm:col-span-2 rounded-lg bg-orange-700 hover:bg-orange-800 py-2 text-xs font-semibold text-white cursor-pointer"
                       >
                         Create Staff User
                       </button>
@@ -1854,13 +1466,32 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                             </span>
                           </div>
                           {u.id !== auth.user.id && (
-                            <button
-                              type="button"
-                              onClick={() => removeUser(u.id)}
-                              className="text-red-600 hover:underline cursor-pointer"
-                            >
-                              Remove
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <select
+                                aria-label={`Role for ${u.email}`}
+                                value={u.role}
+                                onChange={(e) => updateUser(u.id, { role: e.target.value })}
+                                className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#081222] px-1.5 py-1 text-[11px]"
+                              >
+                                <option value="admin">admin</option>
+                                <option value="editor">editor</option>
+                                <option value="analyst">analyst</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => updateUser(u.id, { active: !u.active })}
+                                className="text-slate-700 dark:text-slate-300 hover:underline cursor-pointer"
+                              >
+                                {u.active ? 'Disable' : 'Enable'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeUser(u.id)}
+                                className="text-red-700 hover:underline cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           )}
                         </div>
                       ))}
@@ -1869,7 +1500,34 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                 )}
               </div>
 
-              <div className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5 space-y-4">
+              <div className="lg:col-span-5 space-y-6">
+              <form onSubmit={changeOwnPassword} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5 space-y-3">
+                <h2 className="text-base font-bold text-[#0B1F3A] dark:text-white">Change my password</h2>
+                <div>
+                  <label htmlFor="pw-cur" className={labelCls}>Current password</label>
+                  <input id="pw-cur" type="password" required autoComplete="current-password" value={pwForm.currentPassword} onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })} className={inputCls} />
+                </div>
+                <div>
+                  <label htmlFor="pw-new" className={labelCls}>New password (12+ characters)</label>
+                  <input id="pw-new" type="password" required minLength={12} autoComplete="new-password" value={pwForm.newPassword} onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })} className={inputCls} />
+                </div>
+                <button type="submit" className="rounded-lg bg-[#0B1F3A] dark:bg-sky-700 px-4 py-2 text-xs font-semibold text-white">Change password</button>
+              </form>
+
+              <AuthorsPanel
+                authors={dashboard.authors || []}
+                isAdmin={auth.user.role === 'admin'}
+                authedFetch={authedFetch}
+                notify={notify}
+                onSaved={async () => {
+                  await loadDashboard(auth.user.role);
+                  onDataChanged();
+                }}
+                inputCls={inputCls}
+                labelCls={labelCls}
+              />
+
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5 space-y-4">
                 <h2 className="text-base font-bold text-[#0B1F3A] dark:text-white flex items-center gap-2">
                   <Database className="h-4 w-4 text-sky-600" />
                   <span>Database Backup &amp; Restore</span>
@@ -1882,7 +1540,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                   <div className="space-y-3">
                     <a
                       href="/api/admin/backup"
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0B1F3A] dark:bg-sky-600 px-4 py-2.5 text-xs font-semibold text-white hover:opacity-90"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0B1F3A] dark:bg-sky-700 px-4 py-2.5 text-xs font-semibold text-white hover:opacity-90"
                     >
                       Download JSON Database Backup
                     </a>
@@ -1899,6 +1557,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
                     </label>
                   </div>
                 )}
+              </div>
               </div>
             </div>
           )}

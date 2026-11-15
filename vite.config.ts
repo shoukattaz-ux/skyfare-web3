@@ -20,9 +20,9 @@ export default defineConfig(() => {
         ],
         manifest: {
           id: '/',
-          name: 'SkyFare — Cheap Flights & Airfare Deals',
+          name: 'SkyFare: Airfare Guides and Fare Examples',
           short_name: 'SkyFare',
-          description: 'Fly more. Pay less. Verified cheap domestic and international flights from US airports.',
+          description: 'Airfare guides and dated example fares from US airports.',
           theme_color: '#0B1F3A',
           background_color: '#0B1F3A',
           display: 'standalone',
@@ -50,41 +50,47 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          // Pages come from the server (real HTML, real 404s, boot data). The cache is only an offline fallback.
+          globPatterns: ['**/*.{js,css,svg,woff,woff2}', 'pwa-*.png', 'apple-touch-icon.png'],
+          navigateFallback: null,
+          cleanupOutdatedCaches: true,
           runtimeCaching: [
             {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: 'CacheFirst',
+              urlPattern: ({ request, url }: { request: Request; url: URL }) =>
+                request.mode === 'navigate' && !/^\/(api|uploads)\//.test(url.pathname),
+              handler: 'NetworkFirst',
               options: {
-                cacheName: 'google-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+                cacheName: 'pages',
+                networkTimeoutSeconds: 4,
+                expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 7 },
               },
+            },
+            {
+              urlPattern: /\.(?:webp|jpg|jpeg|png)$/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'images',
+                expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              },
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              handler: 'StaleWhileRevalidate',
+              options: { cacheName: 'google-fonts-css', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } },
             },
             {
               urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'gstatic-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                cacheableResponse: { statuses: [0, 200] },
               },
             },
           ],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
       }),
     ],

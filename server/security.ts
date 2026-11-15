@@ -25,6 +25,27 @@ export function sanitizeText(value: unknown, maxLen = 500): string {
     .slice(0, maxLen);
 }
 
+/** Strips control characters and trims, without HTML-escaping (React escapes on render). */
+export function cleanText(value: unknown, maxLen = 500): string {
+  if (typeof value !== 'string') return '';
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, maxLen);
+}
+
+/** Returns the URL only if it is http(s) (or a same-site absolute path when allowed). */
+export function safeUrl(value: unknown, opts: { allowRelative?: boolean; maxLen?: number } = {}): string {
+  if (typeof value !== 'string') return '';
+  const v = value.trim().slice(0, opts.maxLen ?? 500);
+  if (!v) return '';
+  if (opts.allowRelative && /^\/(?!\/)[^\s]*$/.test(v)) return v;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
 export function sanitizeSlug(value: unknown, maxLen = 100): string {
   if (typeof value !== 'string') return '';
   return value
@@ -43,13 +64,24 @@ export function parseCookies(cookieHeader: string | undefined): Record<string, s
     const idx = pair.indexOf('=');
     if (idx === -1) continue;
     const key = pair.slice(0, idx).trim();
-    const val = decodeURIComponent(pair.slice(idx + 1).trim());
+    let val = pair.slice(idx + 1).trim();
+    try {
+      val = decodeURIComponent(val);
+    } catch {
+      continue; // malformed cookie value: ignore instead of throwing a 500
+    }
     out[key] = val;
   }
   return out;
 }
 
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+// Keep the in-memory bucket map from growing forever.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rateBuckets) if (now > v.resetAt) rateBuckets.delete(k);
+}, 5 * 60 * 1000).unref();
 
 export function checkRateLimit(
   key: string,

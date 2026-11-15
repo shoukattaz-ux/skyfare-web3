@@ -1,116 +1,123 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Mail, MapPin, ShieldCheck } from 'lucide-react';
-import type { LegalPageRecord, TravelGuide } from '../types/flight';
+import { Link } from '../components/Link';
+import type { LegalPageRecord, SiteGeneralSettings, TravelGuide } from '../types/flight';
 import { DESTINATIONS } from '../data/destinations';
 import { AIRLINES } from '../data/airlines';
 import { TRAVEL_GUIDES } from '../data/guides';
+import { fillTokens, parseMarkdown, type Inline } from '../lib/markdown';
 
 interface LegalNavProps {
   onNavigate: (path: string) => void;
-  legalPages?: LegalPageRecord[];
   guides?: TravelGuide[];
 }
 
-function getCmsLegal(legalPages: LegalPageRecord[] | undefined, slug: string): LegalPageRecord | undefined {
-  return legalPages?.find((p) => p.slug === slug);
-}
+const inlineNodes = (parts: Inline[], onNavigate: (p: string) => void): React.ReactNode[] =>
+  parts.map((p, i) => {
+    if (p.t === 'bold') return <strong key={i}>{p.v}</strong>;
+    if (p.t === 'code') return <code key={i} className="font-mono text-[0.9em] rounded bg-slate-100 dark:bg-slate-800 px-1">{p.v}</code>;
+    if (p.t === 'link') {
+      const internal = p.href.startsWith('/') && !p.href.startsWith('//');
+      return internal ? (
+        <Link key={i} href={p.href} onNavigate={onNavigate} className="text-sky-700 dark:text-sky-400 underline underline-offset-2">
+          {p.v}
+        </Link>
+      ) : (
+        <a
+          key={i}
+          href={p.href}
+          className="text-sky-700 dark:text-sky-400 underline underline-offset-2"
+          {...(p.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+        >
+          {p.v}
+        </a>
+      );
+    }
+    return <React.Fragment key={i}>{p.v}</React.Fragment>;
+  });
 
-const CmsParagraphs: React.FC<{ markdown: string }> = ({ markdown }) => (
-  <div className="space-y-4 text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-    {markdown
-      .split(/\n{2,}/)
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .map((para, idx) => (
-        <p key={idx}>{para}</p>
-      ))}
-  </div>
-);
-
-export const AboutPage: React.FC<LegalNavProps> = ({ onNavigate, legalPages }) => {
-  const cms = getCmsLegal(legalPages, 'about');
-  return (
-  <article className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-12 space-y-8">
-    <header className="space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-400">
-        About SkyFare
-      </p>
-      <h1 className="text-3xl sm:text-4xl font-bold text-[#0B1F3A] dark:text-white tracking-tight">
-        {cms?.title || 'Making Transparent Airfare Accessible to Every US Traveler'}
-      </h1>
-      <p className="text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-        SkyFare Media LLC was founded in San Francisco with one plain goal: help budget-conscious US travelers fly more and pay less without falling for hidden bag fees or deceptive countdown gimmicks.
-      </p>
-    </header>
-    {cms?.content_markdown && (
-      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 sm:p-8">
-        <CmsParagraphs markdown={cms.content_markdown} />
-      </section>
-    )}
-
-    <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 sm:p-8 space-y-4">
-      <h2 className="text-xl font-bold text-[#0B1F3A] dark:text-white">Our Editorial &amp; Data Standards</h2>
-      <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-        Unlike automated scraping bots that publish broken ghost fares, SkyFare monitors accredited aviation data partners including Amadeus, Travelpayouts, Skyscanner, and Expedia Partner Solutions. Every deal card highlights carry-on eligibility, cabin class, layover airports, and verified update timestamps.
-      </p>
-      <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-        Our revenue comes from clearly labeled display advertisements and affiliate booking commissions—never ticket markups. Clicking any outbound deal link costs you zero extra dollars.
-      </p>
-    </section>
-
-    <section className="space-y-4">
-      <h2 className="text-xl font-bold text-[#0B1F3A] dark:text-white">Editorial &amp; Pricing Team</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5">
-          <h3 className="font-semibold text-[#0B1F3A] dark:text-white">Elena Vance</h3>
-          <p className="text-xs text-sky-700 dark:text-sky-400 mt-0.5">Senior Airfare Analyst</p>
-          <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-            Former airline revenue analyst specializing in transatlantic fare buckets and alliance stopover rules.
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5">
-          <h3 className="font-semibold text-[#0B1F3A] dark:text-white">Marcus Thorne</h3>
-          <p className="text-xs text-sky-700 dark:text-sky-400 mt-0.5">Route Pricing Editor</p>
-          <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-            Tracks Pacific Northwest, Midwest, and transpacific fare calendars across 35+ US departure hubs.
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5">
-          <h3 className="font-semibold text-[#0B1F3A] dark:text-white">Claire Lindqvist</h3>
-          <p className="text-xs text-sky-700 dark:text-sky-400 mt-0.5">Consumer Aviation Writer</p>
-          <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-            Audits domestic carrier baggage dimensions, family seating rules, and US DOT / EU261 refund protections.
-          </p>
-        </div>
+/** Renders any CMS-managed policy/about page (Admin -> SEO & Legal). */
+export const LegalDocPage: React.FC<{
+  slug: string;
+  legalPages?: LegalPageRecord[];
+  general?: SiteGeneralSettings;
+  onNavigate: (path: string) => void;
+  onOpenCookieSettings?: () => void;
+}> = ({ slug, legalPages, general, onNavigate, onOpenCookieSettings }) => {
+  const page = legalPages?.find((p) => p.slug === slug);
+  if (!page) {
+    // CMS data not loaded yet (first paint) — the server already sent the full text in the HTML.
+    return (
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 text-sm text-slate-500" aria-busy="true">
+        Loading…
       </div>
-    </section>
+    );
+  }
+  const tokens = {
+    siteName: general?.siteName,
+    supportEmail: general?.supportEmail,
+    publisherName: general?.publisherName,
+    companyAddress: general?.companyAddress,
+  };
+  const blocks = parseMarkdown(fillTokens(page.content_markdown, tokens));
+  const showCookieButton = slug === 'cookie-policy' || slug === 'privacy';
 
-    <div className="flex flex-wrap gap-3">
-      <button
-        type="button"
-        onClick={() => onNavigate('/contact')}
-        className="rounded-xl bg-orange-600 hover:bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white cursor-pointer"
-      >
-        Contact Our Team
-      </button>
-      <button
-        type="button"
-        onClick={() => onNavigate('/affiliate-disclosure')}
-        className="rounded-xl border border-slate-300 dark:border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 cursor-pointer"
-      >
-        Read Affiliate Disclosure
-      </button>
-    </div>
-  </article>
+  return (
+    <article className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+      <nav aria-label="Breadcrumb" className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+        <Link href="/" onNavigate={onNavigate} className="hover:underline">Home</Link>
+        <span aria-hidden="true"> / </span>
+        <span>{fillTokens(page.title, tokens)}</span>
+      </nav>
+      <h1 className="text-3xl sm:text-4xl font-bold text-[#0B1F3A] dark:text-white tracking-tight">
+        {fillTokens(page.title, tokens)}
+      </h1>
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Last updated {page.updated_at.slice(0, 10)}</p>
+
+      <div className="mt-8 text-[15px] sm:text-base text-slate-700 dark:text-slate-300 leading-7 space-y-4 [overflow-wrap:anywhere]">
+        {blocks.map((b, i) => {
+          if (b.t === 'h2')
+            return (
+              <h2 key={i} className="pt-4 text-xl font-bold text-[#0B1F3A] dark:text-white">
+                {inlineNodes(b.inline, onNavigate)}
+              </h2>
+            );
+          if (b.t === 'h3')
+            return (
+              <h3 key={i} className="pt-2 text-base font-semibold text-[#0B1F3A] dark:text-white">
+                {inlineNodes(b.inline, onNavigate)}
+              </h3>
+            );
+          if (b.t === 'ul')
+            return (
+              <ul key={i} className="list-disc pl-5 space-y-2">
+                {b.items.map((it, j) => (
+                  <li key={j}>{inlineNodes(it, onNavigate)}</li>
+                ))}
+              </ul>
+            );
+          return <p key={i}>{inlineNodes(b.inline, onNavigate)}</p>;
+        })}
+      </div>
+
+      {showCookieButton && onOpenCookieSettings && (
+        <button
+          type="button"
+          onClick={onOpenCookieSettings}
+          className="mt-8 rounded-lg bg-[#0B1F3A] dark:bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+        >
+          Change cookie choices
+        </button>
+      )}
+    </article>
   );
 };
 
-export const ContactPage: React.FC = () => {
+export const ContactPage: React.FC<{ general?: SiteGeneralSettings }> = ({ general }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [subject, setSubject] = useState('Flight Deal Question');
+  const [subject, setSubject] = useState('Question about a guide or fare');
   const [message, setMessage] = useState('');
-  const [captchaAnswer, setCaptchaAnswer] = useState('');
   const [honeypot, setHoneypot] = useState('');
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -118,32 +125,21 @@ export const ContactPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus(null);
-    if (captchaAnswer.trim() !== '7') {
-      setStatus({ ok: false, text: 'Please answer the human verification question (3 + 4 = 7).' });
-      return;
-    }
     setSubmitting(true);
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          email,
-          subject,
-          message,
-          website: honeypot,
-        }),
+        body: JSON.stringify({ name, email, subject, message, website: honeypot }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setStatus({ ok: false, text: data.error || 'Submission failed.' });
+        setStatus({ ok: false, text: data.error || 'Submission failed. Please try again.' });
       } else {
         setStatus({ ok: true, text: data.message });
         setName('');
         setEmail('');
         setMessage('');
-        setCaptchaAnswer('');
       }
     } catch {
       setStatus({ ok: false, text: 'Network error. Please try again.' });
@@ -152,144 +148,99 @@ export const ContactPage: React.FC = () => {
     }
   };
 
+  const field =
+    'w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B1526] px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500';
+  const label = 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1';
+
   return (
-    <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 sm:py-14 grid grid-cols-1 lg:grid-cols-12 gap-8">
       <div className="lg:col-span-5 space-y-5">
-        <h1 className="text-3xl font-bold text-[#0B1F3A] dark:text-white tracking-tight">
-          Contact SkyFare
-        </h1>
-        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Have a route request, press inquiry, ad partnership question, or privacy request? Reach our editorial desk directly.
+        <h1 className="text-3xl font-bold text-[#0B1F3A] dark:text-white tracking-tight">Contact {general?.siteName || 'SkyFare'}</h1>
+        <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
+          Spotted a mistake or an outdated fare? Have a question about a guide, a privacy request, or a partnership
+          idea? Write to us. We read every message; we reply when a reply is needed.
         </p>
 
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5 space-y-4 text-sm">
-          <div className="flex items-start gap-3">
-            <Mail className="h-4 w-4 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
-            <div>
-              <div className="font-semibold text-[#0B1F3A] dark:text-white">Support &amp; Editorial</div>
-              <div className="text-slate-600 dark:text-slate-300">support@skyfareusa.com</div>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <MapPin className="h-4 w-4 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
-            <div>
-              <div className="font-semibold text-[#0B1F3A] dark:text-white">US Mailing Address</div>
-              <div className="text-slate-600 dark:text-slate-300">
-                SkyFare Media LLC<br />
-                548 Market St, Suite 41290<br />
-                San Francisco, CA 94104
+          {general?.supportEmail && (
+            <div className="flex items-start gap-3">
+              <Mail className="h-4 w-4 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" aria-hidden="true" />
+              <div>
+                <div className="font-semibold text-[#0B1F3A] dark:text-white">Email</div>
+                <a href={`mailto:${general.supportEmail}`} className="text-sky-700 dark:text-sky-400 underline break-all">
+                  {general.supportEmail}
+                </a>
               </div>
             </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <ShieldCheck className="h-4 w-4 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
-            <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              Typical response time: 1 business day (Monday–Friday, 9am–5pm PT).
+          )}
+          {general?.companyAddress && (
+            <div className="flex items-start gap-3">
+              <MapPin className="h-4 w-4 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" aria-hidden="true" />
+              <div>
+                <div className="font-semibold text-[#0B1F3A] dark:text-white">{general.publisherName || 'Postal address'}</div>
+                <div className="text-slate-600 dark:text-slate-300">{general.companyAddress}</div>
+              </div>
             </div>
+          )}
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="h-4 w-4 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" aria-hidden="true" />
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              For a correction, please include the page address. We cannot change airline fares, issue refunds or
+              help with an existing booking; contact the airline or the site you booked with.
+            </p>
           </div>
         </div>
       </div>
 
       <div className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 sm:p-8">
-        <h2 className="text-xl font-bold text-[#0B1F3A] dark:text-white">Send a Message</h2>
+        <h2 className="text-xl font-bold text-[#0B1F3A] dark:text-white">Send a message</h2>
         {status?.ok ? (
-          <div className="mt-5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-5 flex items-start gap-3">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+          <div role="status" className="mt-5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-5 flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="text-sm text-emerald-900 dark:text-emerald-200">{status.text}</div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-            <input
-              type="text"
-              tabIndex={-1}
-              autoComplete="off"
-              value={honeypot}
-              onChange={(e) => setHoneypot(e.target.value)}
-              className="hidden"
-              aria-hidden="true"
-            />
+            {/* Honeypot: real visitors never see or fill this field. */}
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
+              <label>
+                Leave this empty
+                <input type="text" tabIndex={-1} autoComplete="off" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
+              </label>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B1526] px-3.5 py-2.5 text-sm text-slate-900 dark:text-white"
-                />
+                <label htmlFor="c-name" className={label}>Your name</label>
+                <input id="c-name" type="text" required minLength={2} maxLength={120} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} className={field} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B1526] px-3.5 py-2.5 text-sm text-slate-900 dark:text-white"
-                />
+                <label htmlFor="c-email" className={label}>Email address</label>
+                <input id="c-email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={field} />
               </div>
             </div>
-
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Topic
-              </label>
-              <select
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B1526] px-3.5 py-2.5 text-sm text-slate-900 dark:text-white"
-              >
-                <option>Flight Deal Question</option>
-                <option>Report an Expired Fare</option>
-                <option>Advertising &amp; Partnerships</option>
-                <option>GDPR / CCPA Privacy Request</option>
+              <label htmlFor="c-topic" className={label}>Topic</label>
+              <select id="c-topic" value={subject} onChange={(e) => setSubject(e.target.value)} className={field}>
+                <option>Question about a guide or fare</option>
+                <option>Report an error or an expired fare</option>
+                <option>Privacy or data request</option>
+                <option>Advertising or partnerships</option>
+                <option>Something else</option>
               </select>
             </div>
-
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Message
-              </label>
-              <textarea
-                rows={4}
-                required
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B1526] px-3.5 py-2.5 text-sm text-slate-900 dark:text-white"
-              />
+              <label htmlFor="c-msg" className={label}>Message</label>
+              <textarea id="c-msg" rows={5} required minLength={10} maxLength={2500} value={message} onChange={(e) => setMessage(e.target.value)} className={field} />
             </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Spam Protection: What is 3 + 4?
-              </label>
-              <input
-                type="text"
-                required
-                value={captchaAnswer}
-                onChange={(e) => setCaptchaAnswer(e.target.value)}
-                placeholder="Enter number"
-                className="w-40 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B1526] px-3.5 py-2 text-sm font-mono-tabular text-slate-900 dark:text-white"
-              />
-            </div>
-
             {status && !status.ok && (
-              <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
-                {status.text}
-              </p>
+              <p role="alert" className="text-sm font-medium text-red-700 dark:text-red-400">{status.text}</p>
             )}
-
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-60 px-6 py-2.5 text-sm font-semibold text-white transition-colors cursor-pointer"
+              className="rounded-xl bg-orange-700 hover:bg-orange-800 disabled:opacity-60 px-6 py-2.5 text-sm font-semibold text-white transition-colors"
             >
-              {submitting ? 'Sending...' : 'Send Message'}
+              {submitting ? 'Sending…' : 'Send message'}
             </button>
           </form>
         )}
@@ -298,238 +249,61 @@ export const ContactPage: React.FC = () => {
   );
 };
 
-export const PrivacyPolicyPage: React.FC<{
-  onOpenCookieSettings: () => void;
-  legalPages?: LegalPageRecord[];
-}> = ({ onOpenCookieSettings, legalPages }) => {
-  const cms = getCmsLegal(legalPages, 'privacy');
-  return (
-    <article className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-12 space-y-6 text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-      <h1 className="text-3xl font-bold text-[#0B1F3A] dark:text-white">
-        {cms?.title || 'Privacy Policy'}
-      </h1>
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        Last Updated: {cms?.updated_at?.slice(0, 10) || '2026-11-14'} · SkyFare Media LLC
-      </p>
-
-      {cms?.content_markdown && <CmsParagraphs markdown={cms.content_markdown} />}
-
-      <section className="space-y-2">
-        <h2 className="text-lg font-bold text-[#0B1F3A] dark:text-white">1. Information We Collect</h2>
-        <p>
-          We collect information you voluntarily submit when subscribing to price alerts, joining our newsletter, or submitting our contact form (such as email address, origin airport preference, and message content). Saved deals and theme preferences are stored locally in your browser.
-        </p>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="text-lg font-bold text-[#0B1F3A] dark:text-white">
-          2. Cookies, Google AdSense, Media.net &amp; Revcontent Advertising
-        </h2>
-        <p>
-          Third-party vendors, including Google AdSense, Media.net, and Revcontent, use cookies to serve ads based on a user’s prior visits to SkyFare or other websites. Google’s use of advertising cookies enables it and its partners to serve ads to you based on your visit to our site and/or other sites on the Internet.
-        </p>
-        <button
-          type="button"
-          onClick={onOpenCookieSettings}
-          className="mt-2 rounded-lg bg-[#0B1F3A] dark:bg-sky-600 px-4 py-2 text-xs font-semibold text-white cursor-pointer"
-        >
-          Manage Cookie &amp; Ad Preferences
-        </button>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="text-lg font-bold text-[#0B1F3A] dark:text-white">3. GDPR &amp; CCPA / CPRA Rights</h2>
-        <p>
-          European Economic Area (GDPR) and California (CCPA/CPRA) residents have the right to request access to, correction of, or deletion of personal information, and to opt out of personalized ad targeting. Contact support@skyfareusa.com to exercise any privacy right within 30 days.
-        </p>
-      </section>
-    </article>
-  );
-};
-
-export const CookiePolicyPage: React.FC<{
-  onOpenCookieSettings: () => void;
-  legalPages?: LegalPageRecord[];
-}> = ({ onOpenCookieSettings, legalPages }) => {
-  const cms = getCmsLegal(legalPages, 'cookie-policy');
-  return (
-    <article className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-12 space-y-6 text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-      <h1 className="text-3xl font-bold text-[#0B1F3A] dark:text-white">
-        {cms?.title || 'Cookie Policy'}
-      </h1>
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        Last Updated: {cms?.updated_at?.slice(0, 10) || '2026-11-14'} · SkyFare Media LLC
-      </p>
-
-      {cms?.content_markdown && <CmsParagraphs markdown={cms.content_markdown} />}
-
-      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-        <table className="w-full text-left text-xs sm:text-sm">
-          <thead className="bg-slate-50 dark:bg-[#0B1526] text-slate-700 dark:text-slate-200">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Category</th>
-              <th className="px-4 py-3 font-semibold">Purpose</th>
-              <th className="px-4 py-3 font-semibold">Control</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-            <tr>
-              <td className="px-4 py-3 font-semibold">Essential Storage</td>
-              <td className="px-4 py-3">Saved deals, dark/light theme, staff CSRF/session security</td>
-              <td className="px-4 py-3 text-emerald-700 dark:text-emerald-400 font-medium">Always Active</td>
-            </tr>
-            <tr>
-              <td className="px-4 py-3 font-semibold">Analytics (GA4)</td>
-              <td className="px-4 py-3">Measures route popularity, page load speed, and readership</td>
-              <td className="px-4 py-3">Consent Banner Toggle</td>
-            </tr>
-            <tr>
-              <td className="px-4 py-3 font-semibold">Advertising (AdSense, Media.net, Revcontent)</td>
-              <td className="px-4 py-3">Delivers contextual or personalized travel advertisements</td>
-              <td className="px-4 py-3">Consent Banner Toggle</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <button
-        type="button"
-        onClick={onOpenCookieSettings}
-        className="rounded-lg bg-orange-600 hover:bg-orange-700 px-5 py-2.5 text-xs font-semibold text-white cursor-pointer"
-      >
-        Update Cookie Consent Choices
-      </button>
-    </article>
-  );
-};
-
-export const TermsPage: React.FC<{ legalPages?: LegalPageRecord[] }> = ({ legalPages }) => {
-  const cms = getCmsLegal(legalPages, 'terms');
-  return (
-    <article className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-12 space-y-6 text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-      <h1 className="text-3xl font-bold text-[#0B1F3A] dark:text-white">
-        {cms?.title || 'Terms & Conditions'}
-      </h1>
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        Last Updated: {cms?.updated_at?.slice(0, 10) || '2026-11-14'}
-      </p>
-      {cms?.content_markdown && <CmsParagraphs markdown={cms.content_markdown} />}
-      <p>
-        SkyFare is an independent airfare discovery and travel editorial publisher. We do not directly sell airline tickets, process ticket payments, or operate aircraft. When you click "View Deal", you are redirected to an accredited airline or travel booking partner whose own terms, fare rules, and privacy policies govern your reservation.
-      </p>
-      <p>
-        While we verify published fares prior to listing, airfare inventory changes dynamically by the minute. You agree to review total pricing, baggage fees, layovers, and cancellation conditions on the partner’s checkout page before completing any purchase.
-      </p>
-    </article>
-  );
-};
-
-export const AffiliateDisclosurePage: React.FC<{ legalPages?: LegalPageRecord[] }> = ({
-  legalPages,
-}) => {
-  const cms = getCmsLegal(legalPages, 'affiliate-disclosure');
-  return (
-    <article className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-12 space-y-6 text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-      <h1 className="text-3xl font-bold text-[#0B1F3A] dark:text-white">
-        {cms?.title || 'Affiliate & Advertising Disclosure'}
-      </h1>
-      {cms?.content_markdown && <CmsParagraphs markdown={cms.content_markdown} />}
-      <p>
-        In accordance with Federal Trade Commission (FTC) guidelines, SkyFare Media LLC discloses that outbound flight deal buttons on this website are affiliate links (tagged with <code className="font-mono-tabular">rel="sponsored nofollow"</code>) to partners including Travelpayouts, Expedia Affiliate Network, Skyscanner, and Amadeus partner platforms.
-      </p>
-      <p>
-        If you click a deal link and book a flight, SkyFare may earn a referral commission at zero additional cost to you. Compensation never influences which fare drops we publish—deals are selected strictly on price value, routing quality, and baggage transparency.
-      </p>
-      <p>
-        Display advertising slots on SkyFare are reserved for Google AdSense, Media.net, and Revcontent native recommendations, clearly labeled "Advertisement" or "Sponsored Placement".
-      </p>
-    </article>
-  );
-};
-
-export const DisclaimerPage: React.FC<{ legalPages?: LegalPageRecord[] }> = ({ legalPages }) => {
-  const cms = getCmsLegal(legalPages, 'disclaimer');
-  return (
-    <article className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-12 space-y-6 text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-      <h1 className="text-3xl font-bold text-[#0B1F3A] dark:text-white">
-        {cms?.title || 'Airfare Pricing Disclaimer'}
-      </h1>
-      {cms?.content_markdown && <CmsParagraphs markdown={cms.content_markdown} />}
-      <p>
-        <strong>Prices may change without notice.</strong> All airfares displayed on SkyFare reflect verified round-trip or one-way base quotes observed at the listed "Last updated" timestamp for a single adult traveler in USD, including mandatory taxes and carrier surcharges unless otherwise noted.
-      </p>
-      <p>
-        Optional airline ancillaries—including checked luggage, advance seat selection, priority boarding, or basic economy carry-on upgrades—may incur additional airline charges. Travelers are solely responsible for verifying passport validity, transit visas, and entry requirements before departure.
-      </p>
-    </article>
-  );
-};
-
 export const HtmlSitemapPage: React.FC<LegalNavProps> = ({ onNavigate, guides }) => {
   const activeGuides = guides && guides.length > 0 ? guides : TRAVEL_GUIDES;
+  const li = 'text-sky-700 dark:text-sky-400 hover:underline';
+  const core: [string, string][] = [
+    ['/', 'Home: example fares'],
+    ['/domestic', 'Domestic fares'],
+    ['/international', 'International fares'],
+    ['/guides', 'All guides'],
+    ['/search', 'Site search'],
+    ['/about', 'About'],
+    ['/editorial-policy', 'Editorial Policy'],
+    ['/corrections-policy', 'Corrections Policy'],
+    ['/contact', 'Contact'],
+    ['/privacy', 'Privacy Policy'],
+    ['/cookie-policy', 'Cookie Policy'],
+    ['/terms', 'Terms of Use'],
+    ['/affiliate-disclosure', 'Advertising and Affiliate Disclosure'],
+    ['/disclaimer', 'Disclaimer'],
+  ];
   return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-12 space-y-10">
+    <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-10 sm:py-14 space-y-10">
       <div>
-        <h1 className="text-3xl font-bold text-[#0B1F3A] dark:text-white">HTML Sitemap</h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          Complete directory of all SkyFare deal hubs, destination guides, airline policies, editorial articles, search, and legal disclosures.
-        </p>
+        <h1 className="text-3xl font-bold text-[#0B1F3A] dark:text-white">Site map</h1>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Every guide, destination, airline page and policy in one list.</p>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 text-sm">
         <div>
-          <h2 className="font-bold text-[#0B1F3A] dark:text-white mb-3">Core &amp; Legal Pages</h2>
-          <ul className="space-y-2 text-sky-700 dark:text-sky-400">
-            <li><button type="button" onClick={() => onNavigate('/')}>Home / All Flight Deals</button></li>
-            <li><button type="button" onClick={() => onNavigate('/domestic')}>Domestic USA Flights</button></li>
-            <li><button type="button" onClick={() => onNavigate('/international')}>International Flights</button></li>
-            <li><button type="button" onClick={() => onNavigate('/search')}>Site Search</button></li>
-            <li><button type="button" onClick={() => onNavigate('/guides')}>Travel Guides Index</button></li>
-            <li><button type="button" onClick={() => onNavigate('/about')}>About Us</button></li>
-            <li><button type="button" onClick={() => onNavigate('/contact')}>Contact Us</button></li>
-            <li><button type="button" onClick={() => onNavigate('/privacy')}>Privacy Policy</button></li>
-            <li><button type="button" onClick={() => onNavigate('/cookie-policy')}>Cookie Policy</button></li>
-            <li><button type="button" onClick={() => onNavigate('/terms')}>Terms &amp; Conditions</button></li>
-            <li><button type="button" onClick={() => onNavigate('/affiliate-disclosure')}>Affiliate Disclosure</button></li>
-            <li><button type="button" onClick={() => onNavigate('/disclaimer')}>Disclaimer</button></li>
+          <h2 className="font-bold text-[#0B1F3A] dark:text-white mb-3">Main pages and policies</h2>
+          <ul className="space-y-2">
+            {core.map(([href, text]) => (
+              <li key={href}><Link href={href} onNavigate={onNavigate} className={li}>{text}</Link></li>
+            ))}
           </ul>
         </div>
-
         <div>
           <h2 className="font-bold text-[#0B1F3A] dark:text-white mb-3">Destinations ({DESTINATIONS.length})</h2>
-          <ul className="space-y-2 text-sky-700 dark:text-sky-400">
+          <ul className="space-y-2">
             {DESTINATIONS.map((d) => (
-              <li key={d.slug}>
-                <button type="button" onClick={() => onNavigate(`/destinations/${d.slug}`)}>
-                  Cheap Flights to {d.city}
-                </button>
-              </li>
+              <li key={d.slug}><Link href={`/destinations/${d.slug}`} onNavigate={onNavigate} className={li}>Flights to {d.city}</Link></li>
             ))}
           </ul>
         </div>
-
         <div>
           <h2 className="font-bold text-[#0B1F3A] dark:text-white mb-3">Airlines ({AIRLINES.length})</h2>
-          <ul className="space-y-2 text-sky-700 dark:text-sky-400">
+          <ul className="space-y-2">
             {AIRLINES.map((a) => (
-              <li key={a.slug}>
-                <button type="button" onClick={() => onNavigate(`/airlines/${a.slug}`)}>
-                  {a.name} Deals
-                </button>
-              </li>
+              <li key={a.slug}><Link href={`/airlines/${a.slug}`} onNavigate={onNavigate} className={li}>{a.name}</Link></li>
             ))}
           </ul>
         </div>
-
         <div>
-          <h2 className="font-bold text-[#0B1F3A] dark:text-white mb-3">Travel Guides ({activeGuides.length})</h2>
-          <ul className="space-y-2 text-sky-700 dark:text-sky-400">
+          <h2 className="font-bold text-[#0B1F3A] dark:text-white mb-3">Guides ({activeGuides.length})</h2>
+          <ul className="space-y-2">
             {activeGuides.map((g) => (
-              <li key={g.slug}>
-                <button type="button" onClick={() => onNavigate(`/guides/${g.slug}`)} className="text-left">
-                  {g.title}
-                </button>
-              </li>
+              <li key={g.slug}><Link href={`/guides/${g.slug}`} onNavigate={onNavigate} className={li}>{g.title}</Link></li>
             ))}
           </ul>
         </div>
@@ -540,30 +314,21 @@ export const HtmlSitemapPage: React.FC<LegalNavProps> = ({ onNavigate, guides })
 
 export const NotFoundPage: React.FC<LegalNavProps> = ({ onNavigate }) => (
   <div className="mx-auto max-w-2xl px-4 py-20 text-center space-y-5">
-    <div className="font-mono-tabular text-5xl font-bold text-sky-600 dark:text-sky-400">
-      404
-    </div>
-    <h1 className="text-2xl sm:text-3xl font-bold text-[#0B1F3A] dark:text-white">
-      Flight Route or Page Not Found
-    </h1>
-    <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-      The page or flight fare you requested may have expired or moved. Explore active domestic and international flight deals below.
+    <div className="font-mono-tabular text-5xl font-bold text-sky-700 dark:text-sky-400" aria-hidden="true">404</div>
+    <h1 className="text-2xl sm:text-3xl font-bold text-[#0B1F3A] dark:text-white">Page not found</h1>
+    <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
+      This page does not exist or has moved. A fare entry may also have been removed once it ended.
     </p>
     <div className="flex flex-wrap justify-center gap-3 pt-2">
-      <button
-        type="button"
-        onClick={() => onNavigate('/')}
-        className="rounded-xl bg-orange-600 hover:bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white"
-      >
-        View All Deals
-      </button>
-      <button
-        type="button"
-        onClick={() => onNavigate('/sitemap')}
-        className="rounded-xl border border-slate-300 dark:border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200"
-      >
-        Open Sitemap
-      </button>
+      <Link href="/" onNavigate={onNavigate} className="rounded-xl bg-orange-700 hover:bg-orange-800 px-5 py-2.5 text-sm font-semibold text-white">
+        Go to the home page
+      </Link>
+      <Link href="/guides" onNavigate={onNavigate} className="rounded-xl border border-slate-300 dark:border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+        Browse guides
+      </Link>
+      <Link href="/sitemap" onNavigate={onNavigate} className="rounded-xl border border-slate-300 dark:border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+        Site map
+      </Link>
     </div>
   </div>
 );

@@ -9,7 +9,7 @@ import type {
   TravelGuide,
 } from '../types/flight';
 import { DealCard } from '../components/DealCard';
-import { LeaderboardAd } from '../components/AdSlots';
+import { Link } from '../components/Link';
 
 interface SearchPageProps {
   savedIds: string[];
@@ -25,8 +25,6 @@ export const SearchPage: React.FC<SearchPageProps> = ({
   savedIds,
   onToggleSave,
   onNavigate,
-  adPlacements,
-  monetization,
 }) => {
   const initialQuery =
     typeof window !== 'undefined'
@@ -108,14 +106,10 @@ export const SearchPage: React.FC<SearchPageProps> = ({
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-        <button
-          type="button"
-          onClick={() => onNavigate('/')}
-          className="hover:text-[#0B1F3A] dark:hover:text-white inline-flex items-center gap-1 cursor-pointer"
-        >
+        <Link href={'/'} onNavigate={onNavigate} className="hover:text-[#0B1F3A] dark:hover:text-white inline-flex items-center gap-1 cursor-pointer">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Home</span>
-        </button>
+        </Link>
         <span aria-hidden="true">/</span>
         <span className="font-medium text-slate-800 dark:text-slate-200">Site Search</span>
       </nav>
@@ -126,7 +120,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
             Search Deals, Destinations, Airlines &amp; Guides
           </h1>
           <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">
-            Search verified US flight routes, airport codes, carrier baggage rules, and airfare strategy guides.
+            Search example fares, destinations, airlines and guides.
           </p>
         </div>
 
@@ -147,7 +141,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           </div>
           <button
             type="submit"
-            className="rounded-xl bg-orange-600 hover:bg-orange-700 px-6 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="rounded-xl bg-orange-700 hover:bg-orange-800 px-6 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
             Search SkyFare
           </button>
@@ -169,12 +163,6 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           )}
         </div>
       </header>
-
-      <LeaderboardAd
-        slotId="skyfare-top-leaderboard"
-        adPlacements={adPlacements}
-        monetization={monetization}
-      />
 
       {activeQuery && (
         <div className="space-y-6">
@@ -206,7 +194,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                   onClick={() => setTab(key)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                     tab === key
-                      ? 'bg-[#0B1F3A] dark:bg-sky-600 text-white'
+                      ? 'bg-[#0B1F3A] dark:bg-sky-700 text-white'
                       : 'border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] text-slate-700 dark:text-slate-300'
                   }`}
                 >
@@ -255,12 +243,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {results.destinations.map((dest) => (
-                  <button
-                    key={dest.slug}
-                    type="button"
-                    onClick={() => onNavigate(`/destinations/${dest.slug}`)}
-                    className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-4 hover:border-sky-500/50 transition-colors cursor-pointer"
-                  >
+                  <Link href={`/destinations/${dest.slug}`} onNavigate={onNavigate} key={dest.slug} className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-4 hover:border-sky-500/50 transition-colors cursor-pointer">
                     <div className="text-xs text-slate-500 dark:text-slate-400">
                       {dest.country} · {dest.airportCodes.join(', ')}
                     </div>
@@ -270,7 +253,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                     <div className="mt-2 text-xs font-mono-tabular font-semibold text-emerald-700 dark:text-emerald-400">
                       Starting from ${dest.startingPrice}
                     </div>
-                  </button>
+                  </Link>
                 ))}
               </div>
             </section>
@@ -284,12 +267,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {results.airlines.map((airline) => (
-                  <button
-                    key={airline.slug}
-                    type="button"
-                    onClick={() => onNavigate(`/airlines/${airline.slug}`)}
-                    className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-4 hover:border-sky-500/50 transition-colors cursor-pointer"
-                  >
+                  <Link href={`/airlines/${airline.slug}`} onNavigate={onNavigate} key={airline.slug} className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-4 hover:border-sky-500/50 transition-colors cursor-pointer">
                     <div className="text-xs text-slate-500 dark:text-slate-400">
                       {airline.code} · {airline.type}
                     </div>
@@ -299,7 +277,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                     <div className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
                       {airline.carryOnPolicy}
                     </div>
-                  </button>
+                  </Link>
                 ))}
               </div>
             </section>
@@ -313,12 +291,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {results.guides.map((guide) => (
-                  <button
-                    key={guide.slug}
-                    type="button"
-                    onClick={() => onNavigate(`/guides/${guide.slug}`)}
-                    className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5 hover:border-sky-500/50 transition-colors cursor-pointer"
-                  >
+                  <Link href={`/guides/${guide.slug}`} onNavigate={onNavigate} key={guide.slug} className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5 hover:border-sky-500/50 transition-colors cursor-pointer">
                     <div className="text-xs text-sky-700 dark:text-sky-400 font-medium">
                       {guide.category} · {guide.readTimeMinutes} min read
                     </div>
@@ -328,7 +301,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                     <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
                       {guide.excerpt}
                     </p>
-                  </button>
+                  </Link>
                 ))}
               </div>
             </section>

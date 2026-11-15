@@ -107,6 +107,9 @@ export interface TravelGuide {
   wordCount: number;
   imageKey: ImageKey;
   customImageUrl?: string;
+  imageAlt?: string;
+  reviewStatus?: string;
+  reviewedAt?: string;
   excerpt: string;
   sections: GuideSection[];
   faqs: { question: string; answer: string }[];
@@ -122,10 +125,11 @@ export interface CategoryRecord {
 export interface AdPlacementConfig {
   slot_id: string;
   name: string;
-  network: 'AdSense' | 'Media.net' | 'Revcontent' | string;
+  network: 'AdSense' | 'Media.net' | string;
   enabled: number;
   ad_unit_code: string;
   min_height: number;
+  ad_size?: string;
 }
 
 export interface LegalPageRecord {
@@ -151,7 +155,9 @@ export interface SiteGeneralSettings {
   siteName: string;
   tagline: string;
   supportEmail: string;
+  publisherName?: string;
   companyAddress: string;
+  emailAlertsEnabled?: boolean;
   defaultTitle: string;
   defaultDescription: string;
   gscVerificationCode: string;
@@ -159,11 +165,11 @@ export interface SiteGeneralSettings {
 }
 
 export interface MonetizationSettings {
+  adsEnabled?: boolean;
   adsensePublisherId: string;
   medianetCustomerId: string;
   medianetSiteId: string;
-  revcontentWidgetId: string;
-  adsTxtExtra: string;
+  adsTxtExtra?: string;
 }
 
 export interface MenuItem {
@@ -176,7 +182,7 @@ export interface HomepageConfig {
   heroSubtitle: string;
   showTopWeekly: boolean;
   showDestinations: boolean;
-  showTestimonials: boolean;
+  showHowItWorks: boolean;
   showNewsletter: boolean;
   showFaqs: boolean;
 }
@@ -191,6 +197,7 @@ export interface SiteBootstrap {
   monetization: MonetizationSettings;
   menus: MenuItem[];
   homepage: HomepageConfig;
+  authors?: { id: number; name: string; role: string; bio: string }[];
 }
 
 export interface AdminUser {

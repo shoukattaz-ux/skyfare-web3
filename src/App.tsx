@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Bell, Search } from 'lucide-react';
+import { SiteConfigContext } from './lib/siteConfig';
+import { getConsent, useConsent } from './lib/consent';
 import type {
   AdPlacementConfig,
   FlightDeal,
@@ -14,6 +16,7 @@ import type {
 import { FLIGHT_DEALS } from './data/deals';
 import { TRAVEL_GUIDES } from './data/guides';
 import { getRouteSEO } from './lib/seo';
+import { MIN_PUBLISH_WORDS, countGuideWords } from './lib/guideStats';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { PriceAlertModal } from './components/PriceAlertModal';
@@ -25,18 +28,21 @@ import { DestinationPage } from './pages/DestinationPage';
 import { AirlinePage } from './pages/AirlinePage';
 import { GuidesIndexPage, GuideDetailPage } from './pages/GuidesPage';
 import { SearchPage } from './pages/SearchPage';
-import { AdminPage } from './pages/AdminPage';
-import {
-  AboutPage,
-  AffiliateDisclosurePage,
-  ContactPage,
-  CookiePolicyPage,
-  DisclaimerPage,
-  HtmlSitemapPage,
-  NotFoundPage,
-  PrivacyPolicyPage,
-  TermsPage,
-} from './pages/LegalPages';
+const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+import { ContactPage, HtmlSitemapPage, LegalDocPage, NotFoundPage } from './pages/LegalPages';
+import { LEGAL_SLUGS } from './lib/seo';
+
+function readBoot(): SiteBootstrap | null {
+  try {
+    const el = typeof document !== 'undefined' ? document.getElementById('skyfare-boot') : null;
+    return el?.textContent ? (JSON.parse(el.textContent) as SiteBootstrap) : null;
+  } catch {
+    return null;
+  }
+}
+const BOOT = readBoot();
+// Offline / no-server fallback: only the seed guides that pass the publishing word-count floor.
+const FALLBACK_GUIDES = TRAVEL_GUIDES.filter((g) => countGuideWords(g) >= MIN_PUBLISH_WORDS);
 
 const SAVED_KEY = 'skyfare_saved_deals_v1';
 const THEME_KEY = 'skyfare_theme_v1';
@@ -45,14 +51,14 @@ export default function App() {
   const [pathname, setPathname] = useState<string>(() =>
     typeof window !== 'undefined' ? window.location.pathname || '/' : '/'
   );
-  const [deals, setDeals] = useState<FlightDeal[]>(FLIGHT_DEALS);
-  const [guides, setGuides] = useState<TravelGuide[]>(TRAVEL_GUIDES);
-  const [adPlacements, setAdPlacements] = useState<AdPlacementConfig[]>([]);
-  const [legalPages, setLegalPages] = useState<LegalPageRecord[]>([]);
-  const [general, setGeneral] = useState<SiteGeneralSettings | undefined>(undefined);
-  const [monetization, setMonetization] = useState<MonetizationSettings | undefined>(undefined);
-  const [menus, setMenus] = useState<MenuItem[]>([]);
-  const [homepage, setHomepage] = useState<HomepageConfig | undefined>(undefined);
+  const [deals, setDeals] = useState<FlightDeal[]>(BOOT?.deals?.length ? BOOT.deals : FLIGHT_DEALS);
+  const [guides, setGuides] = useState<TravelGuide[]>(BOOT ? BOOT.guides : FALLBACK_GUIDES);
+  const [adPlacements, setAdPlacements] = useState<AdPlacementConfig[]>(BOOT?.adPlacements ?? []);
+  const [legalPages, setLegalPages] = useState<LegalPageRecord[]>(BOOT?.legalPages ?? []);
+  const [general, setGeneral] = useState<SiteGeneralSettings | undefined>(BOOT?.general);
+  const [monetization, setMonetization] = useState<MonetizationSettings | undefined>(BOOT?.monetization);
+  const [menus, setMenus] = useState<MenuItem[]>(BOOT?.menus ?? []);
+  const [homepage, setHomepage] = useState<HomepageConfig | undefined>(BOOT?.homepage);
 
   const [savedIds, setSavedIds] = useState<string[]>(() => {
     try {
@@ -73,6 +79,7 @@ export default function App() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
   const [cookiePrefsOpen, setCookiePrefsOpen] = useState(false);
+  const consent = useConsent();
 
   const refreshBootstrap = useCallback(() => {
     fetch('/api/bootstrap')
@@ -80,7 +87,7 @@ export default function App() {
       .then((data: SiteBootstrap | null) => {
         if (!data) return;
         if (Array.isArray(data.deals) && data.deals.length > 0) setDeals(data.deals);
-        if (Array.isArray(data.guides) && data.guides.length > 0) setGuides(data.guides);
+        if (Array.isArray(data.guides)) setGuides(data.guides);
         if (Array.isArray(data.adPlacements)) setAdPlacements(data.adPlacements);
         if (Array.isArray(data.legalPages)) setLegalPages(data.legalPages);
         if (data.general) setGeneral(data.general);
@@ -126,49 +133,35 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // Inject optional GA4 script + GSC verification meta if configured & consented
+  // Google Analytics 4 loads only if an admin configured an ID AND the visitor opted in to analytics.
   useEffect(() => {
-    if (general?.gscVerificationCode) {
-      let gsc = document.querySelector('meta[name="google-site-verification"]');
-      if (!gsc) {
-        gsc = document.createElement('meta');
-        gsc.setAttribute('name', 'google-site-verification');
-        document.head.appendChild(gsc);
-      }
-      gsc.setAttribute('content', general.gscVerificationCode);
-    }
-
     const gaId = general?.ga4MeasurementId?.trim();
-    if (gaId && /^G-[A-Z0-9]+$/i.test(gaId)) {
-      let consented = true;
-      try {
-        const raw = localStorage.getItem('skyfare_cookie_consent_v1');
-        if (raw) {
-          const parsed = JSON.parse(raw) as { analytics?: boolean };
-          consented = parsed.analytics !== false;
-        }
-      } catch {
-        // default allow until opted out
-      }
-      if (consented && !document.getElementById('skyfare-ga4-src')) {
-        const s = document.createElement('script');
-        s.id = 'skyfare-ga4-src';
-        s.async = true;
-        s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`;
-        document.head.appendChild(s);
-
-        const inline = document.createElement('script');
-        inline.id = 'skyfare-ga4-init';
-        inline.textContent = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config',${JSON.stringify(gaId)});`;
-        document.head.appendChild(inline);
-      }
-    }
-  }, [general]);
+    if (!gaId || !/^G-[A-Z0-9]+$/i.test(gaId) || !consent.analytics) return;
+    if (document.getElementById('skyfare-ga4-src')) return;
+    const s = document.createElement('script');
+    s.id = 'skyfare-ga4-src';
+    s.async = true;
+    s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`;
+    document.head.appendChild(s);
+    const w = window as unknown as { dataLayer?: unknown[]; gtag?: (...a: unknown[]) => void };
+    w.dataLayer = w.dataLayer || [];
+    w.gtag = function () {
+      // eslint-disable-next-line prefer-rest-params
+      w.dataLayer!.push(arguments);
+    };
+    w.gtag('js', new Date());
+    w.gtag('config', gaId);
+  }, [general, consent.analytics]);
 
   // Dynamic Document Title, Canonical, OpenGraph, JSON-LD, and lightweight Analytics per route
   useEffect(() => {
     const origin = window.location.origin;
-    const seo = getRouteSEO(pathname, origin);
+    const seo = getRouteSEO(pathname, origin, {
+      guides,
+      legal: legalPages,
+      siteName: general?.siteName,
+      supportEmail: general?.supportEmail,
+    });
     document.title = seo.title;
 
     const setMeta = (selector: string, attr: string, content: string) => {
@@ -198,7 +191,8 @@ export default function App() {
     }
     canonical.setAttribute('href', `${origin}${seo.canonicalPath}`);
 
-    const scriptId = 'skyfare-jsonld-dynamic';
+    // Reuse the server-rendered tag so a page never carries two copies of its structured data.
+    const scriptId = 'skyfare-jsonld-ssr';
     let jsonLdScript = document.getElementById(scriptId);
     if (!jsonLdScript) {
       jsonLdScript = document.createElement('script');
@@ -206,29 +200,29 @@ export default function App() {
       jsonLdScript.setAttribute('type', 'application/ld+json');
       document.head.appendChild(jsonLdScript);
     }
-    jsonLdScript.textContent = JSON.stringify(seo.jsonLd);
+    jsonLdScript.textContent = JSON.stringify(seo.jsonLd).replace(/</g, '\\u003c');
 
-    // Record first-party pageview if analytics consent isn't explicitly turned off
-    if (!pathname.startsWith('/admin')) {
-      let allowAnalytics = true;
-      try {
-        const raw = localStorage.getItem('skyfare_cookie_consent_v1');
-        if (raw) {
-          const parsed = JSON.parse(raw) as { analytics?: boolean };
-          allowAnalytics = parsed.analytics !== false;
-        }
-      } catch {
-        // default true
+    let robots = document.querySelector('meta[name="robots"]');
+    if (seo.noindex) {
+      if (!robots) {
+        robots = document.createElement('meta');
+        robots.setAttribute('name', 'robots');
+        document.head.appendChild(robots);
       }
-      if (allowAnalytics) {
-        fetch('/api/analytics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: pathname, eventType: 'pageview' }),
-        }).catch(() => {});
-      }
+      robots.setAttribute('content', 'noindex, nofollow');
+    } else if (robots) {
+      robots.remove();
     }
-  }, [pathname]);
+
+    // First-party page counter (no cookie, no IP stored) - only with analytics consent.
+    if (!pathname.startsWith('/admin') && getConsent().analytics) {
+      fetch('/api/analytics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: pathname.split('?')[0], eventType: 'pageview' }),
+      }).catch(() => {});
+    }
+  }, [pathname, guides, legalPages, general, consent.analytics]);
 
   const navigate = (nextPath: string) => {
     const clean = nextPath.startsWith('/') ? nextPath : `/${nextPath}`;
@@ -323,7 +317,11 @@ export default function App() {
     }
 
     if (clean === '/admin') {
-      return <AdminPage onNavigate={navigate} onDataChanged={refreshBootstrap} />;
+      return (
+        <Suspense fallback={<div className="p-8 text-sm text-slate-500" aria-busy="true">Loading…</div>}>
+          <AdminPage onNavigate={navigate} onDataChanged={refreshBootstrap} />
+        </Suspense>
+      );
     }
 
     if (clean.startsWith('/destinations/')) {
@@ -381,44 +379,43 @@ export default function App() {
       );
     }
 
-    if (clean === '/about') return <AboutPage onNavigate={navigate} legalPages={legalPages} />;
-    if (clean === '/contact') return <ContactPage />;
-    if (clean === '/privacy') {
-      return (
-        <PrivacyPolicyPage
-          onOpenCookieSettings={() => setCookiePrefsOpen(true)}
-          legalPages={legalPages}
-        />
-      );
-    }
-    if (clean === '/cookie-policy') {
-      return (
-        <CookiePolicyPage
-          onOpenCookieSettings={() => setCookiePrefsOpen(true)}
-          legalPages={legalPages}
-        />
-      );
-    }
-    if (clean === '/terms') return <TermsPage legalPages={legalPages} />;
-    if (clean === '/affiliate-disclosure') {
-      return <AffiliateDisclosurePage legalPages={legalPages} />;
-    }
-    if (clean === '/disclaimer') return <DisclaimerPage legalPages={legalPages} />;
+    if (clean === '/contact') return <ContactPage general={general} />;
     if (clean === '/sitemap') return <HtmlSitemapPage onNavigate={navigate} guides={guides} />;
+    if ((LEGAL_SLUGS as readonly string[]).includes(clean.slice(1))) {
+      return (
+        <LegalDocPage
+          slug={clean.slice(1)}
+          legalPages={legalPages}
+          general={general}
+          onNavigate={navigate}
+          onOpenCookieSettings={() => setCookiePrefsOpen(true)}
+        />
+      );
+    }
 
     return <NotFoundPage onNavigate={navigate} />;
   };
 
+  const alertsEnabled = general?.emailAlertsEnabled === true;
+
   return (
+    <SiteConfigContext.Provider value={{ general, monetization, adPlacements }}>
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#071120] text-slate-900 dark:text-slate-100 pb-14 lg:pb-0">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-[#0B1F3A] focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
       <Header
         currentPath={pathname}
         onNavigate={navigate}
         onOpenAlerts={() => setAlertsOpen(true)}
+        alertsEnabled={alertsEnabled}
         menus={menus}
       />
 
-      <main className="flex-1">{renderRoute()}</main>
+      <main id="main-content" tabIndex={-1} className="flex-1 outline-none">{renderRoute()}</main>
 
       <Footer
         onNavigate={navigate}
@@ -430,25 +427,26 @@ export default function App() {
         <button
           type="button"
           onClick={() => navigate('/search')}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0B1F3A] dark:bg-sky-600 py-2 text-xs font-semibold text-white"
+          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0B1F3A] dark:bg-sky-700 py-2 text-xs font-semibold text-white"
         >
           <Search className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Search Site</span>
         </button>
-        <button
-          type="button"
-          onClick={() => setAlertsOpen(true)}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-orange-600 py-2 text-xs font-semibold text-white"
-        >
-          <Bell className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Price Alerts</span>
-        </button>
+        {alertsEnabled && (
+          <button
+            type="button"
+            onClick={() => setAlertsOpen(true)}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-orange-700 py-2 text-xs font-semibold text-white"
+          >
+            <Bell className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Price Alerts</span>
+          </button>
+        )}
       </div>
 
-      <PriceAlertModal
-        isOpen={alertsOpen}
-        onClose={() => setAlertsOpen(false)}
-      />
+      {alertsEnabled && (
+        <PriceAlertModal isOpen={alertsOpen} onClose={() => setAlertsOpen(false)} />
+      )}
 
       <SavedDealsDrawer
         isOpen={savedOpen}
@@ -460,9 +458,11 @@ export default function App() {
       <CookieConsent
         forceOpenPreferences={cookiePrefsOpen}
         onClosePreferences={() => setCookiePrefsOpen(false)}
+        onNavigate={navigate}
       />
 
       <OfflineIndicator />
     </div>
+    </SiteConfigContext.Provider>
   );
 }

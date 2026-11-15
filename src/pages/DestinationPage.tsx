@@ -7,10 +7,12 @@ import type {
   TravelGuide,
 } from '../types/flight';
 import { DESTINATIONS, getDestinationBySlug } from '../data/destinations';
-import { getImageSrc } from '../lib/images';
+import { getImageAlt, getLargeImageSrc } from '../lib/images';
 import { DealCard } from '../components/DealCard';
-import { LeaderboardAd, RevcontentWidget } from '../components/AdSlots';
+import { RelatedGuides } from '../components/AdSlots';
+import { useSiteConfig } from '../lib/siteConfig';
 import { SocialShare } from '../components/SocialShare';
+import { Link } from '../components/Link';
 
 interface DestinationPageProps {
   slug: string;
@@ -35,6 +37,8 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
   adPlacements,
   monetization,
 }) => {
+  const { general } = useSiteConfig();
+  const alertsEnabled = general?.emailAlertsEnabled === true;
   const dest = getDestinationBySlug(slug);
 
   if (!dest) {
@@ -46,13 +50,9 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
           We couldn't find a destination guide for "{slug}".
         </p>
-        <button
-          type="button"
-          onClick={() => onNavigate('/')}
-          className="mt-6 rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white"
-        >
+        <Link href={'/'} onNavigate={onNavigate} className="mt-6 rounded-lg bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white">
           Browse All Flight Deals
-        </button>
+        </Link>
       </div>
     );
   }
@@ -66,22 +66,14 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-10">
       {/* Breadcrumbs */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-        <button
-          type="button"
-          onClick={() => onNavigate('/')}
-          className="hover:text-[#0B1F3A] dark:hover:text-white inline-flex items-center gap-1"
-        >
+        <Link href={'/'} onNavigate={onNavigate} className="hover:text-[#0B1F3A] dark:hover:text-white inline-flex items-center gap-1">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Home</span>
-        </button>
+        </Link>
         <span aria-hidden="true">/</span>
-        <button
-          type="button"
-          onClick={() => onNavigate(`/${dest.category}`)}
-          className="hover:text-[#0B1F3A] dark:hover:text-white capitalize"
-        >
+        <Link href={`/${dest.category}`} onNavigate={onNavigate} className="hover:text-[#0B1F3A] dark:hover:text-white capitalize">
           {dest.category} Flights
-        </button>
+        </Link>
         <span aria-hidden="true">/</span>
         <span className="font-medium text-slate-800 dark:text-slate-200">
           Cheap Flights to {dest.city}
@@ -134,13 +126,15 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
           </dl>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={onOpenAlerts}
-              className="rounded-xl bg-orange-600 hover:bg-orange-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors cursor-pointer"
-            >
-              Track {dest.city} Price Drops
-            </button>
+            {alertsEnabled && (
+              <button
+                type="button"
+                onClick={onOpenAlerts}
+                className="rounded-xl bg-orange-700 hover:bg-orange-800 px-5 py-2.5 text-sm font-semibold text-white transition-colors cursor-pointer"
+              >
+                Track {dest.city} price drops
+              </button>
+            )}
             <span className="text-xs text-slate-500 dark:text-slate-400">
               Cheapest months: {dest.cheapestMonths}
             </span>
@@ -154,35 +148,31 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
 
         <div className="lg:col-span-5 relative min-h-[260px] bg-slate-200 dark:bg-slate-800">
           <img
-            src={getImageSrc(dest.imageKey)}
-            alt={`Travel skyline view of ${dest.city}, ${dest.country}`}
-            referrerPolicy="no-referrer"
+            src={getLargeImageSrc(dest.imageKey)}
+            alt={getImageAlt(dest.imageKey)}
+            width={1280}
+            height={956}
+            fetchPriority="high"
             className="h-full w-full object-cover lg:absolute lg:inset-0"
           />
         </div>
       </section>
-
-      <LeaderboardAd
-        slotId="skyfare-top-leaderboard"
-        adPlacements={adPlacements}
-        monetization={monetization}
-      />
 
       {/* Active Deals to This Destination */}
       <section className="space-y-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xl sm:text-2xl font-bold text-[#0B1F3A] dark:text-white flex items-center gap-2">
             <Plane className="h-5 w-5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
-            <span>Active Flight Deals to {dest.city} ({cityDeals.length})</span>
+            <span>Example fares to {dest.city} ({cityDeals.length})</span>
           </h2>
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            Prices may change · Best days to fly: {dest.bestDaysToFly}
+            Dated snapshots, not live quotes · Best days to fly: {dest.bestDaysToFly}
           </span>
         </div>
 
         {cityDeals.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 text-sm text-slate-600 dark:text-slate-300">
-            No flash fares are currently active for {dest.city}. Set a free price alert above to get notified on the next fare drop.
+            We have no example fares recorded for {dest.city} right now. The typical prices and tips on this page still apply.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -245,29 +235,19 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {relatedDestinations.map((rel) => (
-            <button
-              key={rel.slug}
-              type="button"
-              onClick={() => onNavigate(`/destinations/${rel.slug}`)}
-              className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-4 hover:border-sky-500/50 transition-colors"
-            >
+            <Link href={`/destinations/${rel.slug}`} onNavigate={onNavigate} key={rel.slug} className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-4 hover:border-sky-500/50 transition-colors">
               <div className="text-sm font-semibold text-[#0B1F3A] dark:text-white">
                 Flights to {rel.city}
               </div>
               <div className="mt-1 text-xs font-mono-tabular text-sky-700 dark:text-sky-400">
                 From ${rel.startingPrice}
               </div>
-            </button>
+            </Link>
           ))}
         </div>
       </section>
 
-      <RevcontentWidget
-        onNavigate={onNavigate}
-        adPlacements={adPlacements}
-        monetization={monetization}
-        guides={guides}
-      />
+      <RelatedGuides guides={guides} onNavigate={onNavigate} title="Guides to read before you book" />
     </div>
   );
 };

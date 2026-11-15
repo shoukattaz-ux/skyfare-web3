@@ -1,7 +1,7 @@
 import { AIRLINES, getAirlineBySlug } from '../data/airlines.ts';
-import { FLIGHT_DEALS } from '../data/deals.ts';
 import { DESTINATIONS, getDestinationBySlug } from '../data/destinations.ts';
-import { TRAVEL_GUIDES, getGuideBySlug } from '../data/guides.ts';
+import { TRAVEL_GUIDES } from '../data/guides.ts';
+import type { TravelGuide } from '../types/flight.ts';
 
 export interface RouteSEO {
   title: string;
@@ -9,152 +9,165 @@ export interface RouteSEO {
   canonicalPath: string;
   ogType: 'website' | 'article';
   jsonLd: Record<string, unknown>[];
+  /** false when the path matches no page (server answers 404). */
+  found: boolean;
+  /** true for pages that should not appear in search results. */
+  noindex: boolean;
 }
 
-export function getRouteSEO(pathname: string, baseUrl: string): RouteSEO {
+export interface LegalSeoRow {
+  slug: string;
+  title: string;
+  meta_title: string;
+  meta_description: string;
+  updated_at: string;
+}
+
+/** Data the server passes in so SEO reflects the CMS (database) rather than the static seed. */
+export interface SeoContext {
+  guides?: TravelGuide[];
+  legal?: LegalSeoRow[];
+  siteName?: string;
+  supportEmail?: string;
+  defaultImage?: string;
+}
+
+/** Slugs rendered from the legal_pages table. */
+export const LEGAL_SLUGS = [
+  'about',
+  'editorial-policy',
+  'corrections-policy',
+  'privacy',
+  'cookie-policy',
+  'terms',
+  'affiliate-disclosure',
+  'disclaimer',
+] as const;
+
+const STATIC_FALLBACK: Record<string, { title: string; description: string }> = {
+  '/about': {
+    title: 'About SkyFare | Independent Airfare Guides and Deal Roundups',
+    description: 'What SkyFare is, what it publishes, how it earns money and what it does not do.',
+  },
+  '/editorial-policy': {
+    title: 'Editorial Policy | SkyFare',
+    description: 'How SkyFare guides and fare entries are researched, reviewed, dated and updated.',
+  },
+  '/corrections-policy': {
+    title: 'Corrections Policy | SkyFare',
+    description: 'How to report an error or outdated fare on SkyFare and how corrections are handled.',
+  },
+  '/privacy': { title: 'Privacy Policy | SkyFare', description: 'What data SkyFare collects, why, and your choices.' },
+  '/cookie-policy': { title: 'Cookie Policy | SkyFare', description: 'Cookies and browser storage used by SkyFare, and how to change your choices.' },
+  '/terms': { title: 'Terms of Use | SkyFare', description: 'Terms for using SkyFare.' },
+  '/affiliate-disclosure': { title: 'Advertising and Affiliate Disclosure | SkyFare', description: 'How SkyFare earns money and keeps it separate from editorial content.' },
+  '/disclaimer': { title: 'Disclaimer | SkyFare', description: 'Fares on SkyFare are dated snapshots, not live quotes.' },
+};
+
+export function getRouteSEO(pathname: string, baseUrl: string, ctx: SeoContext = {}): RouteSEO {
   const cleanPath = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
   const canonicalUrl = `${baseUrl}${cleanPath}`;
+  const guides = ctx.guides ?? TRAVEL_GUIDES;
+  const siteName = ctx.siteName || 'SkyFare';
 
-  const orgSchema = {
+  const orgSchema: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: 'SkyFare',
+    name: siteName,
     url: baseUrl,
-    logo: `${baseUrl}/icon.svg`,
-    slogan: 'Fly more. Pay less.',
-    contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'customer support',
-      email: 'support@skyfareusa.com',
-      areaServed: 'US',
-      availableLanguage: 'English',
-    },
+    logo: `${baseUrl}/pwa-512x512.png`,
+    ...(ctx.supportEmail
+      ? {
+          contactPoint: {
+            '@type': 'ContactPoint',
+            contactType: 'customer support',
+            email: ctx.supportEmail,
+            availableLanguage: 'English',
+          },
+        }
+      : {}),
   };
 
   const websiteSchema = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'SkyFare',
+    name: siteName,
     url: baseUrl,
     potentialAction: {
       '@type': 'SearchAction',
-      target: `${baseUrl}/?q={search_term_string}`,
+      target: `${baseUrl}/search?q={search_term_string}`,
       'query-input': 'required name=search_term_string',
     },
   };
 
+  const crumbs = (items: { name: string; path: string }[]) => ({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: baseUrl },
+      ...items.map((it, i) => ({
+        '@type': 'ListItem',
+        position: i + 2,
+        name: it.name,
+        item: `${baseUrl}${it.path}`,
+      })),
+    ],
+  });
+
+  const make = (
+    seo: Pick<RouteSEO, 'title' | 'description' | 'canonicalPath'> &
+      Partial<Pick<RouteSEO, 'ogType' | 'noindex'>> & { jsonLd?: Record<string, unknown>[] }
+  ): RouteSEO => ({
+    ogType: 'website',
+    noindex: false,
+    jsonLd: [orgSchema],
+    found: true,
+    ...seo,
+  });
+
   if (cleanPath === '/') {
-    return {
-      title: 'SkyFare — Cheap Flights & Airfare Deals from the USA',
+    return make({
+      title: `${siteName} | Airfare Guides and Dated Fare Examples from US Airports`,
       description:
-        'Fly more, pay less. Compare verified cheap domestic and international flights from US airports with baggage rules and price alerts.',
+        'Plain-English airfare guides and a hand-kept list of example flight prices from US airports, each with its date, baggage allowance and booking link.',
       canonicalPath: '/',
-      ogType: 'website',
-      jsonLd: [
-        orgSchema,
-        websiteSchema,
-        {
-          '@context': 'https://schema.org',
-          '@type': 'FAQPage',
-          mainEntity: [
-            {
-              '@type': 'Question',
-              name: 'How does SkyFare find cheap flights from US airports?',
-              acceptedAnswer: {
-                '@type': 'Answer',
-                text: 'SkyFare monitors accredited airline feeds and travel partners including Amadeus, Travelpayouts, Skyscanner, and Expedia to surface verified 40% to 65% fare drops.',
-              },
-            },
-            {
-              '@type': 'Question',
-              name: 'Are baggage fees and cabin policies shown before booking?',
-              acceptedAnswer: {
-                '@type': 'Answer',
-                text: 'Yes. Every flight deal lists carry-on and personal item inclusions, cabin class, stops, and exact travel dates before sending you to book.',
-              },
-            },
-            {
-              '@type': 'Question',
-              name: 'Do flight prices on SkyFare change?',
-              acceptedAnswer: {
-                '@type': 'Answer',
-                text: 'Yes. Airline seat inventory updates dynamically. Each deal shows a last-updated timestamp and a realistic offer window, and prices may change at partner checkout.',
-              },
-            },
-          ],
-        },
-      ],
-    };
+      jsonLd: [orgSchema, websiteSchema],
+    });
   }
 
   if (cleanPath === '/domestic') {
-    return {
-      title: 'Cheapest Domestic Flights in the USA | SkyFare',
+    return make({
+      title: `Example Domestic Flight Fares from US Airports | ${siteName}`,
       description:
-        'Browse verified cheap US domestic flight deals across New York, Miami, Los Angeles, Seattle, and Honolulu with transparent bag policies.',
+        'Dated example fares on US domestic routes, with the baggage allowance, stops and travel dates for each. Prices change fast: confirm at checkout.',
       canonicalPath: '/domestic',
-      ogType: 'website',
-      jsonLd: [
-        orgSchema,
-        {
-          '@context': 'https://schema.org',
-          '@type': 'BreadcrumbList',
-          itemListElement: [
-            { '@type': 'ListItem', position: 1, name: 'Home', item: baseUrl },
-            { '@type': 'ListItem', position: 2, name: 'Domestic Flights', item: canonicalUrl },
-          ],
-        },
-      ],
-    };
+      jsonLd: [orgSchema, crumbs([{ name: 'Domestic Flights', path: '/domestic' }])],
+    });
   }
 
   if (cleanPath === '/international') {
-    return {
-      title: 'Cheap International Flights from the USA | SkyFare',
+    return make({
+      title: `Example International Flight Fares from the USA | ${siteName}`,
       description:
-        'Save up to 60% on international flights from US hubs to Cancun, Paris, London, Tokyo, Rome, Dublin, and Lisbon.',
+        'Dated example fares from US airports to Mexico, Europe and Asia, with baggage allowance and stops shown for each. Prices change fast: confirm at checkout.',
       canonicalPath: '/international',
-      ogType: 'website',
-      jsonLd: [
-        orgSchema,
-        {
-          '@context': 'https://schema.org',
-          '@type': 'BreadcrumbList',
-          itemListElement: [
-            { '@type': 'ListItem', position: 1, name: 'Home', item: baseUrl },
-            { '@type': 'ListItem', position: 2, name: 'International Flights', item: canonicalUrl },
-          ],
-        },
-      ],
-    };
+      jsonLd: [orgSchema, crumbs([{ name: 'International Flights', path: '/international' }])],
+    });
   }
 
   if (cleanPath.startsWith('/destinations/')) {
-    const slug = cleanPath.replace('/destinations/', '');
-    const dest = getDestinationBySlug(slug);
+    const dest = getDestinationBySlug(cleanPath.replace('/destinations/', ''));
     if (dest) {
-      const destDeals = FLIGHT_DEALS.filter((d) => d.destinationSlug === dest.slug);
-      return {
-        title: `Cheap Flights to ${dest.city} from $${dest.startingPrice} | SkyFare`,
-        description: `Find cheap flights to ${dest.city} (${dest.airportCodes.join(', ')}) starting at $${dest.startingPrice} round-trip. Compare airlines, cheapest months, and baggage rules.`,
+      return make({
+        title: `Flights to ${dest.city}: Cheapest Months, Airports and Tips | ${siteName}`,
+        description: `Planning a trip to ${dest.city} (${dest.airportCodes.join(', ')})? Typical fares, cheapest months, flight times from the US and airport tips.`,
         canonicalPath: `/destinations/${dest.slug}`,
-        ogType: 'website',
         jsonLd: [
           orgSchema,
-          {
-            '@context': 'https://schema.org',
-            '@type': 'BreadcrumbList',
-            itemListElement: [
-              { '@type': 'ListItem', position: 1, name: 'Home', item: baseUrl },
-              {
-                '@type': 'ListItem',
-                position: 2,
-                name: dest.category === 'domestic' ? 'Domestic Flights' : 'International Flights',
-                item: `${baseUrl}/${dest.category}`,
-              },
-              { '@type': 'ListItem', position: 3, name: `Flights to ${dest.city}`, item: canonicalUrl },
-            ],
-          },
+          crumbs([
+            { name: dest.category === 'domestic' ? 'Domestic Flights' : 'International Flights', path: `/${dest.category}` },
+            { name: `Flights to ${dest.city}`, path: `/destinations/${dest.slug}` },
+          ]),
           ...(dest.faqs.length > 0
             ? [
                 {
@@ -168,86 +181,58 @@ export function getRouteSEO(pathname: string, baseUrl: string): RouteSEO {
                 },
               ]
             : []),
-          ...destDeals.slice(0, 3).map((deal) => ({
-            '@context': 'https://schema.org',
-            '@type': 'Offer',
-            name: `${deal.originCity} (${deal.originCode}) to ${deal.destinationCity} (${deal.destinationCode}) on ${deal.airlineName}`,
-            price: String(deal.price),
-            priceCurrency: 'USD',
-            availability: 'https://schema.org/InStock',
-            validThrough: deal.expiresAt,
-            url: canonicalUrl,
-          })),
         ],
-      };
+      });
     }
   }
 
   if (cleanPath.startsWith('/airlines/')) {
-    const slug = cleanPath.replace('/airlines/', '');
-    const airline = getAirlineBySlug(slug);
+    const airline = getAirlineBySlug(cleanPath.replace('/airlines/', ''));
     if (airline) {
-      return {
-        title: `${airline.name} Flight Deals & Baggage Guide | SkyFare`,
-        description: `Compare verified ${airline.name} (${airline.code}) flight deals, carry-on policies, checked bag fees, and booking tips from US hubs.`,
+      return make({
+        title: `${airline.name}: Baggage Fees, Fare Rules and Example Fares | ${siteName}`,
+        description: `What to know about flying ${airline.name} (${airline.code}) from US hubs: carry-on and checked-bag rules, change policy and booking tips. Confirm current rules with the airline.`,
         canonicalPath: `/airlines/${airline.slug}`,
-        ogType: 'website',
-        jsonLd: [
-          orgSchema,
-          {
-            '@context': 'https://schema.org',
-            '@type': 'BreadcrumbList',
-            itemListElement: [
-              { '@type': 'ListItem', position: 1, name: 'Home', item: baseUrl },
-              { '@type': 'ListItem', position: 2, name: `${airline.name} Deals`, item: canonicalUrl },
-            ],
-          },
-        ],
-      };
+        jsonLd: [orgSchema, crumbs([{ name: `${airline.name}`, path: `/airlines/${airline.slug}` }])],
+      });
     }
   }
 
   if (cleanPath === '/guides') {
-    return {
-      title: 'Airfare & Travel Guides for US Flyers | SkyFare',
-      description:
-        'Read 15 original airfare guides on finding cheap flights, best booking windows, budget airline fees, and traveler refund rights.',
+    return make({
+      title: `Airfare and Travel Guides for US Flyers | ${siteName}`,
+      description: `Read ${guides.length} guides on booking timing, baggage fees, airline policies, airport programs and passenger rights.`,
       canonicalPath: '/guides',
-      ogType: 'website',
-      jsonLd: [
-        orgSchema,
-        {
-          '@context': 'https://schema.org',
-          '@type': 'BreadcrumbList',
-          itemListElement: [
-            { '@type': 'ListItem', position: 1, name: 'Home', item: baseUrl },
-            { '@type': 'ListItem', position: 2, name: 'Travel Guides', item: canonicalUrl },
-          ],
-        },
-      ],
-    };
+      jsonLd: [orgSchema, crumbs([{ name: 'Travel Guides', path: '/guides' }])],
+    });
   }
 
   if (cleanPath.startsWith('/guides/')) {
-    const slug = cleanPath.replace('/guides/', '');
-    const guide = getGuideBySlug(slug);
+    const guide = guides.find((g) => g.slug === cleanPath.replace('/guides/', ''));
     if (guide) {
-      return {
+      const isTeam = /editorial team$/i.test(guide.author);
+      return make({
         title: guide.metaTitle,
         description: guide.metaDescription,
         canonicalPath: `/guides/${guide.slug}`,
         ogType: 'article',
         jsonLd: [
           orgSchema,
+          crumbs([
+            { name: 'Travel Guides', path: '/guides' },
+            { name: guide.title, path: `/guides/${guide.slug}` },
+          ]),
           {
             '@context': 'https://schema.org',
             '@type': 'Article',
-            headline: guide.title,
+            headline: guide.title.slice(0, 110),
             description: guide.metaDescription,
             datePublished: guide.publishedAt,
             dateModified: guide.updatedAt,
-            author: { '@type': 'Person', name: guide.author },
-            publisher: { '@type': 'Organization', name: 'SkyFare' },
+            author: isTeam
+              ? { '@type': 'Organization', name: siteName, url: baseUrl }
+              : { '@type': 'Person', name: guide.author },
+            publisher: { '@type': 'Organization', name: siteName },
             mainEntityOfPage: canonicalUrl,
           },
           ...(guide.faqs.length > 0
@@ -264,111 +249,86 @@ export function getRouteSEO(pathname: string, baseUrl: string): RouteSEO {
               ]
             : []),
         ],
-      };
+      });
     }
   }
 
-  const staticPages: Record<string, { title: string; description: string }> = {
-    '/search': {
-      title: 'Search Flights, Destinations & Guides | SkyFare',
-      description:
-        'Search across verified US flight deals, destination guides, airline baggage rules, and airfare tutorials.',
-    },
-    '/about': {
-      title: 'About SkyFare — Our Airfare Mission & Team',
-      description:
-        'Meet the analysts behind SkyFare. Learn how we verify US domestic and international flight deals without deceptive markups.',
-    },
-    '/contact': {
-      title: 'Contact SkyFare — Support & Editorial Inquiries',
-      description:
-        'Get in touch with the SkyFare team in San Francisco for flight deal feedback, partnerships, or privacy requests.',
-    },
-    '/privacy': {
-      title: 'Privacy Policy (GDPR & CCPA) | SkyFare',
-      description:
-        'Read how SkyFare handles cookies, price alert emails, Google AdSense, Media.net, and Revcontent advertising preferences.',
-    },
-    '/cookie-policy': {
-      title: 'Cookie Policy & Ad Consent Controls | SkyFare',
-      description:
-        'Learn how essential, analytics, Google AdSense, Media.net, and Revcontent cookies operate on SkyFare.',
-    },
-    '/terms': {
-      title: 'Terms & Conditions | SkyFare',
-      description:
-        'Review SkyFare terms of use, fare verification scope, and third-party airline booking responsibilities.',
-    },
-    '/affiliate-disclosure': {
-      title: 'Affiliate & Advertising Disclosure | SkyFare',
-      description:
-        'Full FTC-compliant disclosure of SkyFare affiliate partnerships with Travelpayouts, Expedia, Skyscanner, and display advertising.',
-    },
-    '/disclaimer': {
-      title: 'Airfare Pricing Disclaimer | SkyFare',
-      description:
-        'Important notice regarding dynamic airline fare changes, taxes, baggage policies, and visa requirements.',
-    },
-    '/sitemap': {
-      title: 'HTML Sitemap — All Pages & Guides | SkyFare',
-      description:
-        'Browse every SkyFare destination page, airline deal hub, travel guide, and legal policy in one organized index.',
-    },
-    '/admin': {
-      title: 'Admin CMS & Monetization Console | SkyFare',
-      description:
-        'Secure content, SEO, ad placement, user role, and database administration console for SkyFare.',
-    },
-  };
-
-  if (staticPages[cleanPath]) {
-    return {
-      title: staticPages[cleanPath].title,
-      description: staticPages[cleanPath].description,
+  const legalSlug = cleanPath.slice(1);
+  if ((LEGAL_SLUGS as readonly string[]).includes(legalSlug)) {
+    const row = ctx.legal?.find((l) => l.slug === legalSlug);
+    const fb = STATIC_FALLBACK[cleanPath];
+    return make({
+      title: row?.meta_title || fb.title,
+      description: row?.meta_description || fb.description,
       canonicalPath: cleanPath,
-      ogType: 'website',
-      jsonLd: [orgSchema],
-    };
+      jsonLd: [orgSchema, crumbs([{ name: row?.title || fb.title.split('|')[0].trim(), path: cleanPath }])],
+    });
+  }
+
+  if (cleanPath === '/contact') {
+    return make({
+      title: `Contact ${siteName} | Questions, Corrections and Privacy Requests`,
+      description: `Send a question, correction or privacy request to ${siteName}. Use the form or write to the support address.`,
+      canonicalPath: '/contact',
+      jsonLd: [orgSchema, crumbs([{ name: 'Contact', path: '/contact' }])],
+    });
+  }
+
+  if (cleanPath === '/sitemap') {
+    return make({
+      title: `Site Map | ${siteName}`,
+      description: 'Every guide, destination, airline page and policy on the site in one list.',
+      canonicalPath: '/sitemap',
+    });
+  }
+
+  if (cleanPath === '/search') {
+    return make({
+      title: `Search | ${siteName}`,
+      description: 'Search guides, destinations, airlines and example fares.',
+      canonicalPath: '/search',
+      noindex: true,
+    });
+  }
+
+  if (cleanPath === '/admin') {
+    return make({
+      title: `Admin | ${siteName}`,
+      description: 'Restricted area.',
+      canonicalPath: '/admin',
+      noindex: true,
+      jsonLd: [],
+    });
   }
 
   return {
-    title: 'Page Not Found (404) | SkyFare',
-    description: 'The requested flight deal or travel page could not be found on SkyFare.',
+    title: `Page not found | ${siteName}`,
+    description: 'The page you asked for does not exist or has moved.',
     canonicalPath: cleanPath,
     ogType: 'website',
-    jsonLd: [orgSchema],
+    jsonLd: [],
+    found: false,
+    noindex: true,
   };
 }
 
-export function getAllSitemapUrls(): { path: string; priority: string; changefreq: string }[] {
+export interface SitemapEntry {
+  path: string;
+  priority: string;
+  changefreq: string;
+  lastmod?: string;
+}
+
+/** Static (code-defined) pages. Guides and legal pages are added by the server from the database. */
+export function getStaticSitemapUrls(): SitemapEntry[] {
   return [
     { path: '/', priority: '1.0', changefreq: 'daily' },
-    { path: '/domestic', priority: '0.9', changefreq: 'daily' },
-    { path: '/international', priority: '0.9', changefreq: 'daily' },
+    { path: '/domestic', priority: '0.8', changefreq: 'daily' },
+    { path: '/international', priority: '0.8', changefreq: 'daily' },
     { path: '/guides', priority: '0.9', changefreq: 'weekly' },
-    { path: '/search', priority: '0.7', changefreq: 'weekly' },
-    ...DESTINATIONS.map((d) => ({
-      path: `/destinations/${d.slug}`,
-      priority: '0.8',
-      changefreq: 'daily',
-    })),
-    ...AIRLINES.map((a) => ({
-      path: `/airlines/${a.slug}`,
-      priority: '0.8',
-      changefreq: 'weekly',
-    })),
-    ...TRAVEL_GUIDES.map((g) => ({
-      path: `/guides/${g.slug}`,
-      priority: '0.8',
-      changefreq: 'monthly',
-    })),
-    { path: '/about', priority: '0.6', changefreq: 'monthly' },
-    { path: '/contact', priority: '0.6', changefreq: 'monthly' },
-    { path: '/privacy', priority: '0.4', changefreq: 'yearly' },
-    { path: '/cookie-policy', priority: '0.4', changefreq: 'yearly' },
-    { path: '/terms', priority: '0.4', changefreq: 'yearly' },
-    { path: '/affiliate-disclosure', priority: '0.4', changefreq: 'yearly' },
-    { path: '/disclaimer', priority: '0.4', changefreq: 'yearly' },
-    { path: '/sitemap', priority: '0.5', changefreq: 'weekly' },
+    ...DESTINATIONS.map((d) => ({ path: `/destinations/${d.slug}`, priority: '0.7', changefreq: 'weekly' })),
+    ...AIRLINES.map((a) => ({ path: `/airlines/${a.slug}`, priority: '0.7', changefreq: 'monthly' })),
+    { path: '/contact', priority: '0.4', changefreq: 'yearly' },
+    { path: '/sitemap', priority: '0.3', changefreq: 'weekly' },
   ];
 }
