@@ -606,6 +606,34 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, onDataChanged 
           {/* TAB 1: OVERVIEW */}
           {tab === 'overview' && (
             <div className="space-y-6">
+              {(() => {
+                const gs = dashboard.guides as (TravelGuide & { reviewStatus?: string })[];
+                const published = gs.filter((g) => g.status === 'published');
+                const unreviewed = published.filter((g) => g.reviewStatus !== 'reviewed');
+                const avg = published.length ? Math.round(published.reduce((n, g) => n + g.wordCount, 0) / published.length) : 0;
+                const expired = dashboard.deals.filter((d) => d.status !== 'draft' && new Date(d.expiresAt).getTime() < Date.now());
+                const items: [string, string, boolean][] = [
+                  ['Published guides', `${published.length} (aim for 10-15 or more)`, published.length >= 10],
+                  ['Average length', `${avg} words (aim for 800+ on your best guides)`, avg >= 800],
+                  ['Published without a recorded human review', `${unreviewed.length}: open each guide, check it, tick the checklist`, unreviewed.length === 0],
+                  ['Fares past their listed window', `${expired.length}: remove or update them under Flight Deals`, expired.length === 0],
+                  ['Publisher name and contact email set', dashboard.general.publisherName && dashboard.general.supportEmail ? 'Yes' : 'Missing: add under SEO & Legal', Boolean(dashboard.general.publisherName && dashboard.general.supportEmail)],
+                  ['Search Console verification code', dashboard.general.gscVerificationCode ? 'Entered' : 'Not entered yet', Boolean(dashboard.general.gscVerificationCode)],
+                ];
+                return (
+                  <section aria-label="Content health" className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-5">
+                    <h2 className="text-base font-bold text-[#0B1F3A] dark:text-white">Content health (approval readiness)</h2>
+                    <ul className="mt-3 space-y-1.5 text-xs">
+                      {items.map(([label, detail, ok]) => (
+                        <li key={label} className="flex items-start gap-2">
+                          <span aria-hidden="true" className={ok ? 'text-emerald-600' : 'text-amber-600'}>{ok ? '✓' : '!'}</span>
+                          <span className="text-slate-800 dark:text-slate-200"><strong>{label}:</strong> {detail}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })()}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 {[
                   ['Flight Deals', dashboard.stats.totalDeals],

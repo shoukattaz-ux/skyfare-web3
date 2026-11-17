@@ -7,9 +7,9 @@ import type { TravelGuide } from '../types/flight.ts';
 export const MIN_INDEXABLE_WORDS = 150;
 const words = (...t: string[]) => t.join(' ').split(/\s+/).filter(Boolean).length;
 export const destinationWords = (d: (typeof DESTINATIONS)[number]) =>
-  words(d.summary, d.airportTips, d.cheapestMonths, d.bestDaysToFly, ...d.faqs.flatMap((f) => [f.question, f.answer]));
+  words(d.summary, d.airportTips, d.cheapestMonths, d.bestDaysToFly, ...(d.overview || []), ...d.faqs.flatMap((f) => [f.question, f.answer]));
 export const airlineWords = (a: (typeof AIRLINES)[number]) =>
-  words(a.summary, a.bookingTip, a.carryOnPolicy, a.checkedBagFee, a.changePolicy);
+  words(a.summary, a.bookingTip, a.carryOnPolicy, a.checkedBagFee, a.changePolicy, ...(a.overview || []));
 
 export interface RouteSEO {
   title: string;

@@ -94,16 +94,14 @@ export function buildSnapshot(path: string, ctx: SnapshotContext): string {
   if (path.startsWith('/destinations/')) {
     const d = getDestinationBySlug(path.slice('/destinations/'.length));
     if (d) {
-      return `${head}<main><h1>Flights to ${escapeHtml(d.city)}</h1><p>${escapeHtml(d.summary)}</p><p>Cheapest months: ${escapeHtml(d.cheapestMonths)}. Best days to fly: ${escapeHtml(d.bestDaysToFly)}.</p><h2>Airport tips</h2><p>${escapeHtml(d.airportTips)}</p>${d.faqs
-        .map((f) => `<h3>${escapeHtml(f.question)}</h3><p>${escapeHtml(f.answer)}</p>`)
-        .join('')}</main>${foot}`;
+      return `${head}<main><h1>Flying to ${escapeHtml(d.city)}</h1><p>${escapeHtml(d.summary)}</p>${(d.overview || []).map((o) => `<p>${escapeHtml(o)}</p>`).join('')}<h2>Airport tips</h2><p>${escapeHtml(d.airportTips)}</p>${d.faqs.map((f) => `<h3>${escapeHtml(f.question)}</h3><p>${escapeHtml(f.answer)}</p>`).join('')}</main>${foot}`;
     }
   }
 
   if (path.startsWith('/airlines/')) {
     const al = getAirlineBySlug(path.slice('/airlines/'.length));
     if (al) {
-      return `${head}<main><h1>${escapeHtml(al.name)}</h1><p>${escapeHtml(al.summary)}</p><h2>Baggage and changes</h2><p>Carry-on: ${escapeHtml(al.carryOnPolicy)}</p><p>Checked bags: ${escapeHtml(al.checkedBagFee)}</p><p>Changes: ${escapeHtml(al.changePolicy)}</p><p>${escapeHtml(al.bookingTip)}</p></main>${foot}`;
+      return `${head}<main><h1>${escapeHtml(al.name)}</h1><p>${escapeHtml(al.summary)}</p>${(al.overview || []).map((o) => `<p>${escapeHtml(o)}</p>`).join('')}<h2>Bags and changes</h2><p>${escapeHtml(al.carryOnPolicy)}</p><p>${escapeHtml(al.checkedBagFee)}</p><p>${escapeHtml(al.changePolicy)}</p><p>${escapeHtml(al.bookingTip)}</p></main>${foot}`;
     }
   }
 

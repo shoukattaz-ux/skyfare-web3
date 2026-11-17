@@ -251,7 +251,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                       Cheap Flights to {dest.city}
                     </div>
                     <div className="mt-2 text-xs font-mono-tabular font-semibold text-emerald-700 dark:text-emerald-400">
-                      Starting from ${dest.startingPrice}
+                      {dest.airportCodes.join(' · ')}
                     </div>
                   </Link>
                 ))}

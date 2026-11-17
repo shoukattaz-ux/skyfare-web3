@@ -91,7 +91,7 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
               </span>
             </div>
             <h1 className="mt-2 text-3xl sm:text-4xl font-bold text-[#0B1F3A] dark:text-white tracking-tight">
-              Cheap Flights to {dest.city}
+              Flying to {dest.city}
             </h1>
             <p className="mt-3 text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
               {dest.summary}
@@ -100,15 +100,15 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
 
           <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-200 dark:border-slate-800">
             <div>
-              <dt className="text-xs text-slate-500 dark:text-slate-400">Current Low</dt>
-              <dd className="mt-0.5 text-xl font-bold font-mono-tabular text-emerald-700 dark:text-emerald-400">
-                ${dest.startingPrice}
+              <dt className="text-xs text-slate-500 dark:text-slate-400">Main airports</dt>
+              <dd className="mt-0.5 text-xl font-bold font-mono-tabular text-[#0B1F3A] dark:text-white">
+                {dest.airportCodes.join(' · ')}
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-500 dark:text-slate-400">Typical Fare</dt>
-              <dd className="mt-0.5 text-xl font-bold font-mono-tabular text-[#0B1F3A] dark:text-white">
-                ${dest.averagePrice}
+              <dt className="text-xs text-slate-500 dark:text-slate-400">Type</dt>
+              <dd className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {dest.category === 'domestic' ? 'Domestic (US)' : 'International'}
               </dd>
             </div>
             <div>
@@ -141,7 +141,7 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
           </div>
 
           <SocialShare
-            title={`Cheap Flights to ${dest.city} from $${dest.startingPrice}`}
+            title={`Flying to ${dest.city}: airports, seasons and tips`}
             description={dest.summary}
           />
         </div>
@@ -188,6 +188,19 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
           </div>
         )}
       </section>
+
+      {/* Overview */}
+      {dest.overview && dest.overview.length > 0 && (
+        <section aria-label={`About flying to ${dest.city}`} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 sm:p-8 space-y-4">
+          <h2 className="text-xl font-bold text-[#0B1F3A] dark:text-white">Planning a trip to {dest.city}</h2>
+          {dest.overview.map((p, i) => (
+            <p key={i} className="text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-7">{p}</p>
+          ))}
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            General information only: schedules, entry rules and prices change. Confirm details with the airline and the official government source.
+          </p>
+        </section>
+      )}
 
       {/* Airport Tips & Destination FAQs */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -240,7 +253,7 @@ export const DestinationPage: React.FC<DestinationPageProps> = ({
                 Flights to {rel.city}
               </div>
               <div className="mt-1 text-xs font-mono-tabular text-sky-700 dark:text-sky-400">
-                From ${rel.startingPrice}
+                {rel.airportCodes.join(' · ')}
               </div>
             </Link>
           ))}

@@ -60,7 +60,7 @@ export const AirlinePage: React.FC<AirlinePageProps> = ({
               {airline.type} · IATA Code {airline.code}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-[#0B1F3A] dark:text-white">
-              {airline.name} Flight Deals &amp; Baggage Policy
+              {airline.name}: Hubs, Fares and What to Check
             </h1>
           </div>
         </div>
@@ -73,20 +73,20 @@ export const AirlinePage: React.FC<AirlinePageProps> = ({
           <div className="rounded-xl bg-slate-50 dark:bg-[#0B1526] p-4 border border-slate-200/70 dark:border-slate-800">
             <div className="flex items-center gap-2 text-xs font-semibold text-[#0B1F3A] dark:text-white">
               <Briefcase className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden="true" />
-              <span>Carry-On &amp; Checked Bags</span>
+              <span>Bags</span>
             </div>
             <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               {airline.carryOnPolicy}
             </p>
             <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-              Checked: {airline.checkedBagFee}
+              {airline.checkedBagFee}
             </p>
           </div>
 
           <div className="rounded-xl bg-slate-50 dark:bg-[#0B1526] p-4 border border-slate-200/70 dark:border-slate-800">
             <div className="flex items-center gap-2 text-xs font-semibold text-[#0B1F3A] dark:text-white">
               <RefreshCw className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden="true" />
-              <span>Change &amp; Cancellation Rules</span>
+              <span>Changes and refunds</span>
             </div>
             <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               {airline.changePolicy}
@@ -96,7 +96,7 @@ export const AirlinePage: React.FC<AirlinePageProps> = ({
           <div className="rounded-xl bg-slate-50 dark:bg-[#0B1526] p-4 border border-slate-200/70 dark:border-slate-800">
             <div className="flex items-center gap-2 text-xs font-semibold text-[#0B1F3A] dark:text-white">
               <Map className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden="true" />
-              <span>Primary Hubs &amp; Analyst Tip</span>
+              <span>Hubs and a tip</span>
             </div>
             <p className="mt-2 text-xs font-mono-tabular text-slate-700 dark:text-slate-200">
               Hubs: {airline.hubs.join(', ')}
@@ -107,6 +107,18 @@ export const AirlinePage: React.FC<AirlinePageProps> = ({
           </div>
         </div>
       </section>
+
+      {airline.overview && airline.overview.length > 0 && (
+        <section aria-label={`About ${airline.name}`} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1D32] p-6 sm:p-8 space-y-4">
+          <h2 className="text-xl font-bold text-[#0B1F3A] dark:text-white">What to know before you fly {airline.name}</h2>
+          {airline.overview.map((p, i) => (
+            <p key={i} className="text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-7">{p}</p>
+          ))}
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            General information only. Airline rules and networks change, so confirm on {airline.site || "the airline's website"}.
+          </p>
+        </section>
+      )}
 
       {/* Airline Deals */}
       <section className="space-y-4">

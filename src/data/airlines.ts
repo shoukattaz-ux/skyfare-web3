@@ -1,6 +1,7 @@
 import type { AirlineInfo } from '../types/flight';
+import { AIRLINE_TEXT } from './placeContent';
 
-export const AIRLINES: AirlineInfo[] = [
+const BASE_AIRLINES: AirlineInfo[] = [
   {
     slug: 'delta',
     name: 'Delta Air Lines',
@@ -142,6 +143,9 @@ export const AIRLINES: AirlineInfo[] = [
     bookingTip: 'Always calculate total trip cost including bags and seats before comparing Spirit against legacy Basic Economy fares.',
   },
 ];
+
+/** Airline records with evergreen text applied: no fees or bag allowances are asserted here. */
+export const AIRLINES: AirlineInfo[] = BASE_AIRLINES.map((a) => ({ ...a, ...(AIRLINE_TEXT[a.slug] || {}) }));
 
 export function getAirlineBySlug(slug: string): AirlineInfo | undefined {
   return AIRLINES.find((a) => a.slug === slug);

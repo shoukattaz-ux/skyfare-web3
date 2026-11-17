@@ -1,6 +1,7 @@
 import type { DestinationInfo } from '../types/flight';
+import { DESTINATION_TEXT } from './placeContent';
 
-export const DESTINATIONS: DestinationInfo[] = [
+const BASE_DESTINATIONS: DestinationInfo[] = [
   {
     slug: 'new-york',
     city: 'New York City',
@@ -278,6 +279,9 @@ export const DESTINATIONS: DestinationInfo[] = [
     ],
   },
 ];
+
+/** Destination records with verified, evergreen text applied (old price figures are no longer shown). */
+export const DESTINATIONS: DestinationInfo[] = BASE_DESTINATIONS.map((d) => ({ ...d, ...(DESTINATION_TEXT[d.slug] || {}) }));
 
 export function getDestinationBySlug(slug: string): DestinationInfo | undefined {
   return DESTINATIONS.find((d) => d.slug === slug);

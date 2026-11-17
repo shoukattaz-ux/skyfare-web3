@@ -180,6 +180,7 @@ export function initDatabase(): void {
   seedInitialData();
   migrateLegacyContent();
   migrateGuideContent();
+  publishRewrittenGuides();
   applyOwnerDefaults();
 }
 
@@ -191,8 +192,38 @@ function addColumnIfMissing(table: string, column: string, ddl: string): void {
 }
 
 const GUIDE_CONTENT_VERSION = 3;
-// Guides that stay public after the rewrite (they were already public). Everything else waits for human review.
-const LIVE_AFTER_REWRITE = new Set(['how-to-find-cheap-flights', 'best-time-to-book-flights']);
+const GUIDE_PUBLISH_VERSION = 4;
+
+/**
+ * On the owner's instruction the rewritten seed guides are published WITHOUT the "reviewed by a person" mark:
+ * their review status stays "pending_review", so readers are never told a person verified them.
+ * Only guides that no person has edited and that meet the word floor are affected.
+ */
+function publishRewrittenGuides(): void {
+  if (getSetting<number>('guide_publish_version', 0) >= GUIDE_PUBLISH_VERSION) return;
+  const now = new Date().toISOString();
+  db.exec('BEGIN;');
+  try {
+    const snap = db.prepare('INSERT INTO guide_revisions (slug, saved_by, note, payload_json, saved_at) VALUES (?, ?, ?, ?, ?)');
+    const upd = db.prepare("UPDATE guides SET status = 'published' WHERE slug = ?");
+    for (const g of TRAVEL_GUIDES) {
+      const row = db.prepare('SELECT payload_json, status, reviewed_by FROM guides WHERE slug = ?').get(g.slug) as
+        | { payload_json: string; status: string; reviewed_by: string }
+        | undefined;
+      if (!row || row.status === 'published' || row.reviewed_by) continue;
+      if (db.prepare("SELECT 1 FROM guide_revisions WHERE slug = ? AND saved_by != 'system'").get(g.slug)) continue;
+      if (countGuideWords(JSON.parse(row.payload_json)) < MIN_PUBLISH_WORDS) continue;
+      snap.run(g.slug, 'system', "Published on the owner's instruction; no independent human review recorded", row.payload_json, now);
+      upd.run(g.slug);
+    }
+    setSetting('guide_publish_version', GUIDE_PUBLISH_VERSION);
+    db.exec('COMMIT;');
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw err;
+  }
+}
+
 
 /**
  * Installs the full-length, evergreen rewrites of the seed guides. A guide is replaced only if no person has
@@ -222,7 +253,7 @@ function migrateGuideContent(): void {
       if (humanEdit) continue;
       const before = JSON.parse(row.payload_json) as { wordCount?: number; updatedAt?: string };
       const next = { ...g, author: DEFAULT_BYLINE, authorRole: 'Editorial' };
-      const status = LIVE_AFTER_REWRITE.has(g.slug) && row.status === 'published' ? 'published' : 'draft';
+      const status = row.status;
       const sameText = before.updatedAt === next.updatedAt && before.wordCount === next.wordCount;
       if (sameText && status === row.status) continue;
       snap.run(g.slug, 'system', 'Before full-length evergreen rewrite (draft for human review)', row.payload_json, now);

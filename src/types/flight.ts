@@ -63,6 +63,7 @@ export interface DestinationInfo {
   flightTimeFromWest: string;
   summary: string;
   airportTips: string;
+  overview?: string[];
   faqs: { question: string; answer: string }[];
 }
 
@@ -79,6 +80,8 @@ export interface AirlineInfo {
   changePolicy: string;
   summary: string;
   bookingTip: string;
+  overview?: string[];
+  site?: string;
 }
 
 export interface GuideSection {

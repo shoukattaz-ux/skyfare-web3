@@ -21,6 +21,14 @@ Status labels: **PASS** verified by a test I ran · **FIXED** found and correcte
 - `docs/LAUNCH_CHECKLIST.md` lists the exact order of steps to apply to AdSense and Media.net.
 - Re-tested: API 12/12, browser 583/583, admin/ads 41/41, axe 0 violations.
 
+## 0b. Update (round 3)
+- All 22 destination/airline pages rewritten with verified, evergreen text (168-279 words each); they are now indexable and in the sitemap (51 URLs).
+  Removed unverifiable claims there: "from $98" prices, per-airline fee amounts and bag rules (readers are pointed to the airline's own page).
+- All 15 guides are **published, without the "reviewed by a person" badge** (published on the owner's instruction; status stays *pending review*). Revisions keep the earlier text.
+- Admin Overview has a **Content health** panel (guide count/length, unreviewed, expired fares, identity, Search Console).
+- Owner details set: publisher Waqas Khan + contact email.
+- Re-tested: API 12/12, browser 589/589, admin/ads 41/41, axe 0 violations.
+
 ## 1. Overall result
 
 The site is technically sound and policy-ready **as infrastructure**, but **not yet ready to apply**, for two reasons that only a person can fix:

@@ -360,7 +360,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   {dest.city}
                 </div>
                 <div className="mt-2 text-xs font-mono-tabular font-semibold text-sky-700 dark:text-sky-400">
-                  Typical from ${dest.startingPrice}
+                  {dest.airportCodes.join(' · ')}
                 </div>
               </Link>
             ))}

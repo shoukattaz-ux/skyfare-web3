@@ -8,8 +8,8 @@ Nothing below can be done by code alone. Tick in order. Approval is decided by t
 - [ ] (Optional) Add yourself as an Author with a short factual bio. Do not list qualifications you do not have.
 
 ## B. Content (the biggest factor)
-- [ ] Review and publish guides per `docs/REVIEW_GUIDE.md`. Aim for **at least 10-15 published, reviewed guides**, several 800+ words, with your own input.
-- [ ] Expand destination/airline pages to 150+ words of useful text each (they go live in search automatically); or leave them hidden.
+- [~] All 15 guides are published (no review badge). Still recommended: review them per `docs/REVIEW_GUIDE.md`, add your own input, and mark Reviewed. Aim for **at least 10-15 published, reviewed guides**, several 800+ words, with your own input.
+- [x] Destination/airline pages are expanded and live.
 - [ ] Remove expired fares in Admin -> Flight Deals; keep dates accurate. Do not re-add "% off" claims you cannot prove.
 - [ ] Confirm you have the right to use the six site images (or replace them with your own/licensed ones, with credits).
 - [ ] Have the policy pages read by someone qualified in your jurisdiction.
