@@ -3,7 +3,7 @@
 Nothing below can be done by code alone. Tick in order. Approval is decided by the networks, not by this checklist.
 
 ## A. Identity and trust (30 min)
-- [ ] Admin -> SEO & Legal: **Publisher/operator name** (your real name or registered business), **public contact email** you read daily, optional postal address.
+- [x] Publisher name (Waqas Khan) and contact email are pre-set. Confirm you read that mailbox daily; edit under Admin -> SEO & Legal if needed.
 - [ ] Send a test message through /contact and confirm you see it under Admin -> Overview.
 - [ ] (Optional) Add yourself as an Author with a short factual bio. Do not list qualifications you do not have.
 

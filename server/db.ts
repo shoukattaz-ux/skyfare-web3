@@ -180,6 +180,7 @@ export function initDatabase(): void {
   seedInitialData();
   migrateLegacyContent();
   migrateGuideContent();
+  applyOwnerDefaults();
 }
 
 function addColumnIfMissing(table: string, column: string, ddl: string): void {
@@ -233,6 +234,19 @@ function migrateGuideContent(): void {
     db.exec('ROLLBACK;');
     throw err;
   }
+}
+
+// Site owner details (shown publicly on About, Contact, Privacy and the footer). Editable in Admin -> SEO & Legal.
+const OWNER_NAME = process.env.PUBLISHER_NAME || 'Waqas Khan';
+const OWNER_EMAIL = process.env.SUPPORT_EMAIL || 'waqasahmad7981@gmail.com';
+
+/** Fills the owner details on every start, but only where the stored value is still empty. */
+function applyOwnerDefaults(): void {
+  const general = getSetting<Record<string, unknown>>('general', {});
+  let changed = false;
+  if (!general.publisherName) { general.publisherName = OWNER_NAME; changed = true; }
+  if (!general.supportEmail || general.supportEmail === 'support@skyfareusa.com') { general.supportEmail = OWNER_EMAIL; changed = true; }
+  if (changed) setSetting('general', general);
 }
 
 export const DEFAULT_BYLINE = 'SkyFare Editorial Team';
@@ -514,8 +528,8 @@ function seedInitialData(): void {
       JSON.stringify({
         siteName: 'SkyFare',
         tagline: 'Fly more. Pay less.',
-        supportEmail: process.env.SUPPORT_EMAIL || '',
-        publisherName: '',
+        supportEmail: process.env.SUPPORT_EMAIL || 'waqasahmad7981@gmail.com',
+        publisherName: process.env.PUBLISHER_NAME || 'Waqas Khan',
         companyAddress: '',
         emailAlertsEnabled: false,
         defaultTitle: 'SkyFare | Airfare Guides and Dated Fare Examples from US Airports',
