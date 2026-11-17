@@ -179,12 +179,59 @@ export function initDatabase(): void {
 
   seedInitialData();
   migrateLegacyContent();
+  migrateGuideContent();
 }
 
 function addColumnIfMissing(table: string, column: string, ddl: string): void {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
+}
+
+const GUIDE_CONTENT_VERSION = 3;
+// Guides that stay public after the rewrite (they were already public). Everything else waits for human review.
+const LIVE_AFTER_REWRITE = new Set(['how-to-find-cheap-flights', 'best-time-to-book-flights']);
+
+/**
+ * Installs the full-length, evergreen rewrites of the seed guides. A guide is replaced only if no person has
+ * edited it (no non-system revision, never reviewed). The previous text is kept as a revision, and every
+ * rewritten guide is "Pending review": publishing still requires a human to complete the checklist.
+ */
+function migrateGuideContent(): void {
+  if (getSetting<number>('guide_content_version', 0) >= GUIDE_CONTENT_VERSION) return;
+  const now = new Date().toISOString();
+  db.exec('BEGIN;');
+  try {
+    const snap = db.prepare(
+      'INSERT INTO guide_revisions (slug, saved_by, note, payload_json, saved_at) VALUES (?, ?, ?, ?, ?)'
+    );
+    const upd = db.prepare(
+      `UPDATE guides SET title = ?, meta_title = ?, meta_description = ?, author = ?, status = ?, payload_json = ?,
+         updated_at = ?, review_status = 'pending_review', reviewed_by = '', reviewed_at = '' WHERE slug = ?`
+    );
+    for (const g of TRAVEL_GUIDES) {
+      const row = db.prepare('SELECT payload_json, status, reviewed_by FROM guides WHERE slug = ?').get(g.slug) as
+        | { payload_json: string; status: string; reviewed_by: string }
+        | undefined;
+      if (!row || row.reviewed_by) continue;
+      const humanEdit = db
+        .prepare("SELECT 1 FROM guide_revisions WHERE slug = ? AND saved_by != 'system'")
+        .get(g.slug);
+      if (humanEdit) continue;
+      const before = JSON.parse(row.payload_json) as { wordCount?: number; updatedAt?: string };
+      const next = { ...g, author: DEFAULT_BYLINE, authorRole: 'Editorial' };
+      const status = LIVE_AFTER_REWRITE.has(g.slug) && row.status === 'published' ? 'published' : 'draft';
+      const sameText = before.updatedAt === next.updatedAt && before.wordCount === next.wordCount;
+      if (sameText && status === row.status) continue;
+      snap.run(g.slug, 'system', 'Before full-length evergreen rewrite (draft for human review)', row.payload_json, now);
+      upd.run(next.title, next.metaTitle, next.metaDescription, DEFAULT_BYLINE, status, JSON.stringify(next), next.updatedAt, g.slug);
+    }
+    setSetting('guide_content_version', GUIDE_CONTENT_VERSION);
+    db.exec('COMMIT;');
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw err;
   }
 }
 

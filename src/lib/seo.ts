@@ -3,6 +3,14 @@ import { DESTINATIONS, getDestinationBySlug } from '../data/destinations.ts';
 import { TRAVEL_GUIDES } from '../data/guides.ts';
 import type { TravelGuide } from '../types/flight.ts';
 
+/** Pages with less unique prose than this stay out of search results (and the sitemap) until expanded. */
+export const MIN_INDEXABLE_WORDS = 150;
+const words = (...t: string[]) => t.join(' ').split(/\s+/).filter(Boolean).length;
+export const destinationWords = (d: (typeof DESTINATIONS)[number]) =>
+  words(d.summary, d.airportTips, d.cheapestMonths, d.bestDaysToFly, ...d.faqs.flatMap((f) => [f.question, f.answer]));
+export const airlineWords = (a: (typeof AIRLINES)[number]) =>
+  words(a.summary, a.bookingTip, a.carryOnPolicy, a.checkedBagFee, a.changePolicy);
+
 export interface RouteSEO {
   title: string;
   description: string;
@@ -162,6 +170,7 @@ export function getRouteSEO(pathname: string, baseUrl: string, ctx: SeoContext =
         title: `Flights to ${dest.city}: Cheapest Months, Airports and Tips | ${siteName}`,
         description: `Planning a trip to ${dest.city} (${dest.airportCodes.join(', ')})? Typical fares, cheapest months, flight times from the US and airport tips.`,
         canonicalPath: `/destinations/${dest.slug}`,
+        noindex: destinationWords(dest) < MIN_INDEXABLE_WORDS,
         jsonLd: [
           orgSchema,
           crumbs([
@@ -193,6 +202,7 @@ export function getRouteSEO(pathname: string, baseUrl: string, ctx: SeoContext =
         title: `${airline.name}: Baggage Fees, Fare Rules and Example Fares | ${siteName}`,
         description: `What to know about flying ${airline.name} (${airline.code}) from US hubs: carry-on and checked-bag rules, change policy and booking tips. Confirm current rules with the airline.`,
         canonicalPath: `/airlines/${airline.slug}`,
+        noindex: airlineWords(airline) < MIN_INDEXABLE_WORDS,
         jsonLd: [orgSchema, crumbs([{ name: `${airline.name}`, path: `/airlines/${airline.slug}` }])],
       });
     }
@@ -326,8 +336,8 @@ export function getStaticSitemapUrls(): SitemapEntry[] {
     { path: '/domestic', priority: '0.8', changefreq: 'daily' },
     { path: '/international', priority: '0.8', changefreq: 'daily' },
     { path: '/guides', priority: '0.9', changefreq: 'weekly' },
-    ...DESTINATIONS.map((d) => ({ path: `/destinations/${d.slug}`, priority: '0.7', changefreq: 'weekly' })),
-    ...AIRLINES.map((a) => ({ path: `/airlines/${a.slug}`, priority: '0.7', changefreq: 'monthly' })),
+    ...DESTINATIONS.filter((d) => destinationWords(d) >= MIN_INDEXABLE_WORDS).map((d) => ({ path: `/destinations/${d.slug}`, priority: '0.7', changefreq: 'weekly' })),
+    ...AIRLINES.filter((a) => airlineWords(a) >= MIN_INDEXABLE_WORDS).map((a) => ({ path: `/airlines/${a.slug}`, priority: '0.7', changefreq: 'monthly' })),
     { path: '/contact', priority: '0.4', changefreq: 'yearly' },
     { path: '/sitemap', priority: '0.3', changefreq: 'weekly' },
   ];

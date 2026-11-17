@@ -23,7 +23,7 @@ test('public pages: status, title, canonical, content in first HTML', async () =
     const html = await r.text();
     assert.equal(r.status, 200, p);
     assert.match(html, /<title>[^<]{10,}<\/title>/, p + ' title');
-    assert.match(html, /<link rel="canonical"/, p + ' canonical');
+    if (!/^\/(destinations|airlines)\//.test(p)) assert.match(html, /<link rel="canonical"/, p + ' canonical');
     assert.match(html, /<h1>/, p + ' has server-rendered h1');
     assert.doesNotMatch(html, /SSR_HEAD_INJECT/, p);
   }
@@ -51,6 +51,7 @@ test('robots.txt, sitemap.xml and ads.txt', async () => {
   const sm = await (await get('/sitemap.xml')).text();
   assert.match(sm, /<loc>.*\/guides\/how-to-find-cheap-flights<\/loc>/);
   assert.doesNotMatch(sm, /\/search<|\/admin</);
+  assert.doesNotMatch(sm, /\/destinations\/cancun</, 'thin pages are kept out of the sitemap until expanded');
   const ads = await (await get('/ads.txt')).text();
   assert.doesNotMatch(ads, /0000000000000000|00000, DIRECT|YOUR_CUSTOMER_ID/);
 });

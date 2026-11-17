@@ -12,6 +12,15 @@ Status labels: **PASS** verified by a test I ran · **FIXED** found and correcte
 
 ---
 
+## 0. Update (round 2): content is now written, review is the only gate
+
+- All 15 guides now have real article length (389-729 words, average ~500) written as **evergreen explanations** (methods and where to
+  check, no invented fees/fares/statistics). 13 are drafts and all 15 are **Pending review**: a person must verify and publish them
+  (`docs/REVIEW_GUIDE.md`). The two live guides were rewritten too, removing unsourced numbers (e.g. "cuts fares by 35%", a savings table).
+- Destination (12) and airline (10) pages are under 150 words, so they are now automatically `noindex` and out of the sitemap until expanded.
+- `docs/LAUNCH_CHECKLIST.md` lists the exact order of steps to apply to AdSense and Media.net.
+- Re-tested: API 12/12, browser 583/583, admin/ads 41/41, axe 0 violations.
+
 ## 1. Overall result
 
 The site is technically sound and policy-ready **as infrastructure**, but **not yet ready to apply**, for two reasons that only a person can fix:

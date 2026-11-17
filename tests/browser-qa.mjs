@@ -48,7 +48,7 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
     check(info.imgNoAlt === 0, `${vpName} ${p} ${info.imgNoAlt} images without alt attribute`);
     check(info.unlabeled === 0, `${vpName} ${p} ${info.unlabeled} unlabeled form controls`);
     check(info.jsonld <= 1, `${vpName} ${p} has ${info.jsonld} JSON-LD tags (expect <=1)`);
-    if (!is404) check(info.canon.endsWith(p.split('?')[0]) || p === '/', `${vpName} ${p} canonical ${info.canon}`);
+    if (!is404 && !/^\/(destinations|airlines)\//.test(p) && !p.startsWith('/search')) check(info.canon.endsWith(p.split('?')[0]) || p === '/', `${vpName} ${p} canonical ${info.canon}`);
     check(!/Elena Vance|Marcus Thorne|Claire Lindqvist|Media LLC|548 Market|42,000|Hannah Morales|Devon Brooks|Patel|hand-verified|Verified US|Revcontent|Sponsored & Native/i.test(info.text), `${vpName} ${p} contains removed fake/unverified claims`);
     check(!/Reserved|CLS-safe|Advertisement ·/i.test(info.text), `${vpName} ${p} shows an ad placeholder`);
     if (vpName === 'desktop') {

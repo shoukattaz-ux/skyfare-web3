@@ -1,6 +1,8 @@
 import type { TravelGuide } from '../types/flight';
+import { EXPANDED_GUIDES } from './guidesExpanded';
+import { countGuideWords, readMinutes } from '../lib/guideStats';
 
-export const TRAVEL_GUIDES: TravelGuide[] = [
+const BASE_GUIDES: TravelGuide[] = [
   {
     slug: 'how-to-find-cheap-flights',
     title: 'How to Find Cheap Flights in 2026: The Complete US Traveler Playbook',
@@ -553,3 +555,12 @@ export const TRAVEL_GUIDES: TravelGuide[] = [
 export function getGuideBySlug(slug: string): TravelGuide | undefined {
   return TRAVEL_GUIDES.find((g) => g.slug === slug);
 }
+
+/** Seed guides with the full-length rewrites applied and real word counts computed. */
+export const TRAVEL_GUIDES: TravelGuide[] = BASE_GUIDES.map((g) => {
+  const x = EXPANDED_GUIDES[g.slug];
+  const merged = x ? { ...g, ...x, updatedAt: '2026-11-17' } : g;
+  const words = countGuideWords(merged);
+  return { ...merged, wordCount: words, readTimeMinutes: readMinutes(words) };
+});
+

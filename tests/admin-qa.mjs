@@ -30,7 +30,7 @@ check(true, 'login works');
 // ---- editorial workflow
 await page.getByRole('button', { name: 'Posts & Guides' }).click();
 check((await page.getByText('Not yet reviewed').count()) >= 1, 'guides list has review filter');
-check((await page.getByText('Needs revision').count()) >= 10, 'demoted thin guides show "Needs revision"');
+check((await page.getByText('Pending review').count()) >= 10, 'rewritten guides wait as "Pending review"');
 await page.getByRole('button', { name: '+ New blank guide' }).click();
 await page.locator('#g-title').fill('QA browser guide on carry-on baggage rules');
 await page.locator('#g-excerpt').fill('A QA-only guide used to test the workflow.');
